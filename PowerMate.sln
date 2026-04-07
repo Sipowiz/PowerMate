@@ -3,11 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{9F5E6384-8D91-7B30-BF94-463B36B69FC3}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerMate", "PowerMate\PowerMate.csproj", "{452A6C4C-8631-F623-B20F-C8FF9C8E2302}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerMateSettings", "files\PowerMateSettings.csproj", "{9EAE6C11-46AC-C780-9980-3D4F63BD8251}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerMate.Tests", "PowerMate.Tests\PowerMate.Tests.csproj", "{7CF4C2E5-438F-4B38-893B-B65D3C1230DD}"
 EndProject
@@ -33,18 +29,6 @@ Global
 		{452A6C4C-8631-F623-B20F-C8FF9C8E2302}.Release|x64.Build.0 = Release|Any CPU
 		{452A6C4C-8631-F623-B20F-C8FF9C8E2302}.Release|x86.ActiveCfg = Release|Any CPU
 		{452A6C4C-8631-F623-B20F-C8FF9C8E2302}.Release|x86.Build.0 = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|x64.Build.0 = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Debug|x86.Build.0 = Debug|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|x64.ActiveCfg = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|x64.Build.0 = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|x86.ActiveCfg = Release|Any CPU
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251}.Release|x86.Build.0 = Release|Any CPU
 		{7CF4C2E5-438F-4B38-893B-B65D3C1230DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7CF4C2E5-438F-4B38-893B-B65D3C1230DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7CF4C2E5-438F-4B38-893B-B65D3C1230DD}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -60,9 +44,6 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{9EAE6C11-46AC-C780-9980-3D4F63BD8251} = {9F5E6384-8D91-7B30-BF94-463B36B69FC3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E728CCE5-7304-4B66-A13A-FBD4DF9E4634}
