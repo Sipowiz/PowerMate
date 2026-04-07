@@ -33,13 +33,13 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-windows
 
-      - run: dotnet restore PowerMate.sln
+      - run: dotnet restore PowerMate.sln -r win-x64
 
-      - run: dotnet build PowerMate/PowerMate.csproj -c ${{ env.BUILD_CONFIG }} --no-restore
+      - run: dotnet build PowerMate/PowerMate.csproj -c ${{ env.BUILD_CONFIG }} -r win-x64 --no-restore
 
-      - run: dotnet build PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} --no-restore
+      - run: dotnet build PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} -r win-x64 --no-restore
 
-      - run: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} --no-build
+      - run: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} -r win-x64 --no-build
 
   # ── Release (only on v* tags) ────────────────────────────────────────
   release:
