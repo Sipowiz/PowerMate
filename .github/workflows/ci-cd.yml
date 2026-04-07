@@ -30,9 +30,14 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
       - run: dotnet restore PowerMate.sln
 
-      - run: dotnet build PowerMate.sln -c ${{ env.BUILD_CONFIG }} --no-restore -f ${{ env.TARGET_FRAMEWORK }}
+      - run: dotnet build PowerMate/PowerMate.csproj -c ${{ env.BUILD_CONFIG }} --no-restore
+
+      - run: dotnet build PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} --no-restore
 
       - run: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} --no-build --logger trx --results-directory TestResults
 
@@ -56,6 +61,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
 
       - name: Extract version from tag
         id: version

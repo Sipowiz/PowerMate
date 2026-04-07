@@ -37,11 +37,17 @@ stages:
               packageType: 'sdk'
               version: '10.x'
 
+          - script: dotnet workload install maui-windows
+            displayName: 'Install MAUI workload'
+
           - script: dotnet restore PowerMate.sln
             displayName: 'Restore'
 
-          - script: dotnet build PowerMate.sln -c $(buildConfiguration) --no-restore -f $(targetFramework)
-            displayName: 'Build'
+          - script: dotnet build PowerMate/PowerMate.csproj -c $(buildConfiguration) --no-restore
+            displayName: 'Build App'
+
+          - script: dotnet build PowerMate.Tests/PowerMate.Tests.csproj -c $(buildConfiguration) --no-restore
+            displayName: 'Build Tests'
 
           - script: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c $(buildConfiguration) --no-build --logger trx --results-directory $(Agent.TempDirectory)/TestResults
             displayName: 'Run Tests'
