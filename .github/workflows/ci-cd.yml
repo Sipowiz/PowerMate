@@ -82,7 +82,7 @@ jobs:
           Start-Process "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
 
       - name: Compile installer
-        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.version.outputs.VERSION }}" installer.iss'
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.version.outputs.VERSION }} installer.iss'
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
