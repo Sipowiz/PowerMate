@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:PowerMate.ViewModels"
+             x:Class="PowerMate.Views.SettingsPage"
+             x:DataType="vm:SettingsViewModel"
+             Title="PowerMate Settings"
+             BackgroundColor="#1C1C1E">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20,16" Spacing="12">
+
+            <!-- Header -->
+            <Label Text="PowerMate Driver"
+                   FontSize="22"
+                   FontAttributes="Bold"
+                   TextColor="#EBEBF5"
+                   Margin="0,0,0,4" />
+
+            <!-- Status Card -->
+            <Border BackgroundColor="#2C2C2E"
+                    Stroke="#3A3A3C"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 10">
+                <Grid ColumnDefinitions="*,Auto" Padding="16,14">
+                    <VerticalStackLayout Spacing="2">
+                        <Label Text="Device Status" FontSize="12" TextColor="#8E8E93" />
+                        <HorizontalStackLayout Spacing="6">
+                            <Ellipse WidthRequest="8" HeightRequest="8"
+                                     Fill="{Binding ConnectionStatusColor}"
+                                     VerticalOptions="Center" />
+                            <Label Text="{Binding ConnectionStatusText}"
+                                   FontSize="15" FontAttributes="Bold"
+                                   TextColor="#EBEBF5" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" HorizontalOptions="End" Spacing="2">
+                        <Label Text="Master Volume" FontSize="12" TextColor="#8E8E93" HorizontalOptions="End" />
+                        <Label Text="{Binding CurrentVolumeText}"
+                               FontSize="22" FontAttributes="Bold"
+                               TextColor="#0A84FF" HorizontalOptions="End" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <!-- Volume Control -->
+            <Border BackgroundColor="#2C2C2E" Stroke="#3A3A3C" StrokeThickness="1" StrokeShape="RoundRectangle 10">
+                <VerticalStackLayout Padding="16" Spacing="16">
+                    <Label Text="VOLUME CONTROL" FontSize="11" FontAttributes="Bold"
+                           TextColor="#8E8E93" CharacterSpacing="2" />
+
+                    <!-- Volume Step -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Step per tick" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding VolumeStep, StringFormat='{0}%'}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="1" Maximum="10" Value="{Binding VolumeStep}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Sensitivity -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Sensitivity" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding SensitivityText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="0.5" Maximum="3.0" Value="{Binding Sensitivity}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Invert Rotation -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Invert rotation direction" TextColor="#EBEBF5"
+                               FontSize="15" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding InvertRotation}"
+                                OnColor="#0A84FF" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Button Actions -->
+            <Border BackgroundColor="#2C2C2E" Stroke="#3A3A3C" StrokeThickness="1" StrokeShape="RoundRectangle 10">
+                <VerticalStackLayout Padding="16" Spacing="16">
+                    <Label Text="BUTTON ACTIONS" FontSize="13" FontAttributes="Bold"
+                           TextColor="#8E8E93" CharacterSpacing="2" />
+
+                    <!-- Click Action -->
+                    <Grid ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Single click" TextColor="#EBEBF5" FontSize="15" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding ClickActions}"
+                                SelectedIndex="{Binding ClickActionIndex}"
+                                TextColor="#EBEBF5" BackgroundColor="#3A3A3C"
+                                TitleColor="#8E8E93" MinimumWidthRequest="140" />
+                    </Grid>
+
+                    <!-- Double Click Action -->
+                    <Grid ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Double click" TextColor="#EBEBF5" FontSize="15" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding DoubleClickActions}"
+                                SelectedIndex="{Binding DoubleClickActionIndex}"
+                                TextColor="#EBEBF5" BackgroundColor="#3A3A3C"
+                                TitleColor="#8E8E93" MinimumWidthRequest="140" />
+                    </Grid>
+
+                    <!-- Triple Click Action -->
+                    <Grid ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Triple click" TextColor="#EBEBF5" FontSize="15" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding TripleClickActions}"
+                                SelectedIndex="{Binding TripleClickActionIndex}"
+                                TextColor="#EBEBF5" BackgroundColor="#3A3A3C"
+                                TitleColor="#8E8E93" MinimumWidthRequest="140" />
+                    </Grid>
+
+                    <!-- Long Press Action -->
+                    <Grid ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Long press" TextColor="#EBEBF5" FontSize="15" VerticalOptions="Center" />
+                        <Picker Grid.Column="1"
+                                ItemsSource="{Binding LongPressActions}"
+                                SelectedIndex="{Binding LongPressActionIndex}"
+                                TextColor="#EBEBF5" BackgroundColor="#3A3A3C"
+                                TitleColor="#8E8E93" MinimumWidthRequest="140" />
+                    </Grid>
+
+                    <!-- Long Press Duration -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Long press duration" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding LongPressMsText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="300" Maximum="2000" Value="{Binding LongPressMs}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- LED -->
+            <Border BackgroundColor="#2C2C2E" Stroke="#3A3A3C" StrokeThickness="1" StrokeShape="RoundRectangle 10">
+                <VerticalStackLayout Padding="16" Spacing="16">
+                    <Label Text="LED" FontSize="13" FontAttributes="Bold"
+                           TextColor="#8E8E93" CharacterSpacing="2" />
+
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Brightness" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding LedBrightnessText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="0" Maximum="255" Value="{Binding LedBrightness}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Pulse LED on audio output" TextColor="#EBEBF5"
+                                   FontSize="15" />
+                            <Label Text="LED brightness follows line-out peak level"
+                                   TextColor="#8E8E93" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding LedPulseOnAudio}"
+                                OnColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Bass-only sub-option -->
+                    <Grid ColumnDefinitions="*,Auto"
+                          IsVisible="{Binding ShowBassOptions}">
+                        <VerticalStackLayout Spacing="2" Padding="16,0,0,0">
+                            <Label Text="Bass only" TextColor="#EBEBF5" FontSize="15" />
+                            <Label Text="Respond only to low-frequency sounds"
+                                   TextColor="#8E8E93" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding LedBassOnly}"
+                                OnColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Bass frequency cutoff -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4"
+                          IsVisible="{Binding ShowBassFrequency}"
+                          Padding="16,0,0,0">
+                        <Label Text="Frequency cutoff" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding BassFrequencyCutoffText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="60" Maximum="500" Value="{Binding BassFrequencyCutoff}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Bass gain -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4"
+                          IsVisible="{Binding ShowBassFrequency}"
+                          Padding="16,0,0,0">
+                        <Label Text="Bass gain" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding BassGainText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="0.5" Maximum="50" Value="{Binding BassGain}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
+                    <!-- Live level meter -->
+                    <VerticalStackLayout Spacing="4"
+                                         IsVisible="{Binding ShowBassOptions}"
+                                         Padding="0,4,0,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="Live level" TextColor="#8E8E93" FontSize="12" />
+                            <Label Grid.Column="1" Text="{Binding BassLevelText}"
+                                   TextColor="#0A84FF" FontSize="12" FontAttributes="Bold" />
+                        </Grid>
+                        <Border BackgroundColor="#3A3A3C" HeightRequest="8"
+                                StrokeShape="RoundRectangle 4" StrokeThickness="0">
+                            <Grid ColumnDefinitions="*">
+                                <BoxView BackgroundColor="#0A84FF" HorizontalOptions="Start"
+                                         WidthRequest="{Binding BassLevelPercent}"
+                                         HeightRequest="8" />
+                            </Grid>
+                        </Border>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- System -->
+            <Border BackgroundColor="#2C2C2E" Stroke="#3A3A3C" StrokeThickness="1" StrokeShape="RoundRectangle 10">
+                <VerticalStackLayout Padding="16" Spacing="16">
+                    <Label Text="SYSTEM" FontSize="13" FontAttributes="Bold"
+                           TextColor="#8E8E93" CharacterSpacing="2" />
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Start with Windows" TextColor="#EBEBF5" FontSize="15" />
+                            <Label Text="Launch automatically when you log in"
+                                   TextColor="#8E8E93" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding StartWithWindows}"
+                                OnColor="#0A84FF" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

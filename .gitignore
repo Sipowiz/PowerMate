@@ -1,0 +1,18 @@
+## Build output
+**/bin/
+**/obj/
+installer_output/
+
+## IDE
+.vs/
+*.user
+*.suo
+*.csproj.user
+launchSettings.json
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Misc
+*.pdb

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PowerMateSettings.App">
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- Colors -->
+            <Color x:Key="BgColor">#111111</Color>
+            <Color x:Key="BgCard">#1c1c1c</Color>
+            <Color x:Key="BgHeader">#0a0a0a</Color>
+            <Color x:Key="Accent">#3b8ed0</Color>
+            <Color x:Key="AccentDark">#2a6fb1</Color>
+            <Color x:Key="TextPrimary">#e8e8e8</Color>
+            <Color x:Key="TextSecondary">#888888</Color>
+            <Color x:Key="TextMuted">#555555</Color>
+            <Color x:Key="Divider">#2a2a2a</Color>
+            <Color x:Key="ConnectedBg">#0d2e0d</Color>
+            <Color x:Key="ConnectedFg">#44cc66</Color>
+            <Color x:Key="DisconnectedBg">#2e0d0d</Color>
+            <Color x:Key="DisconnectedFg">#dd4444</Color>
+
+            <!-- Label styles -->
+            <Style TargetType="Label">
+                <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+                <Setter Property="FontFamily" Value="SegoeUI" />
+            </Style>
+
+            <!-- Section card style -->
+            <Style x:Key="CardBorder" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{StaticResource BgCard}" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+                <Setter Property="Stroke" Value="Transparent" />
+                <Setter Property="Padding" Value="0" />
+            </Style>
+
+            <!-- Section title -->
+            <Style x:Key="SectionTitle" TargetType="Label">
+                <Setter Property="FontSize" Value="10" />
+                <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
+                <Setter Property="CharacterSpacing" Value="2" />
+                <Setter Property="Margin" Value="0,16,0,6" />
+            </Style>
+
+            <!-- Row label -->
+            <Style x:Key="RowLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+                <Setter Property="VerticalOptions" Value="Center" />
+            </Style>
+
+            <!-- Value label -->
+            <Style x:Key="ValueLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontFamily" Value="SegoeUISemiBold" />
+                <Setter Property="TextColor" Value="{StaticResource Accent}" />
+                <Setter Property="VerticalOptions" Value="Center" />
+                <Setter Property="HorizontalOptions" Value="End" />
+                <Setter Property="WidthRequest" Value="52" />
+            </Style>
+
+            <!-- Slider style -->
+            <Style TargetType="Slider">
+                <Setter Property="MinimumTrackColor" Value="{StaticResource Accent}" />
+                <Setter Property="MaximumTrackColor" Value="#333333" />
+                <Setter Property="ThumbColor" Value="{StaticResource Accent}" />
+                <Setter Property="HeightRequest" Value="20" />
+            </Style>
+
+            <!-- Switch style -->
+            <Style TargetType="Switch">
+                <Setter Property="OnColor" Value="{StaticResource Accent}" />
+                <Setter Property="ThumbColor" Value="White" />
+            </Style>
+
+            <!-- Picker style -->
+            <Style TargetType="Picker">
+                <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+                <Setter Property="BackgroundColor" Value="#252525" />
+                <Setter Property="TitleColor" Value="{StaticResource TextSecondary}" />
+            </Style>
+
+            <!-- Save button -->
+            <Style x:Key="SaveButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource Accent}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="FontFamily" Value="SegoeUISemiBold" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HeightRequest" Value="38" />
+                <Setter Property="WidthRequest" Value="100" />
+            </Style>
+
+            <!-- Cancel button -->
+            <Style x:Key="CancelButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="#252525" />
+                <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+                <Setter Property="FontFamily" Value="SegoeUI" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HeightRequest" Value="38" />
+                <Setter Property="WidthRequest" Value="100" />
+                <Setter Property="BorderColor" Value="#333333" />
+                <Setter Property="BorderWidth" Value="1" />
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

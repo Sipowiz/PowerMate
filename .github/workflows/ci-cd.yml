@@ -1,0 +1,104 @@
+# ──────────────────────────────────────────────────────────────────────
+# PowerMate Driver — GitHub Actions
+#
+# CI:  Build + Test on every push/PR to main
+# CD:  Build installer + create GitHub Release on version tags (v*)
+# ──────────────────────────────────────────────────────────────────────
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '10.x'
+  TARGET_FRAMEWORK: 'net10.0-windows10.0.19041.0'
+  BUILD_CONFIG: 'Release'
+
+jobs:
+  # ── Build & Test ─────────────────────────────────────────────────────
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - run: dotnet restore PowerMate.sln
+
+      - run: dotnet build PowerMate.sln -c ${{ env.BUILD_CONFIG }} --no-restore -f ${{ env.TARGET_FRAMEWORK }}
+
+      - run: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} --no-build --logger trx --results-directory TestResults
+
+      - uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: 'Test Results'
+          path: 'TestResults/**/*.trx'
+          reporter: 'dotnet-trx'
+
+  # ── Release (only on v* tags) ────────────────────────────────────────
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Publish app
+        run: >
+          dotnet publish PowerMate/PowerMate.csproj
+          -f ${{ env.TARGET_FRAMEWORK }}
+          -c ${{ env.BUILD_CONFIG }}
+          -r win-x64
+          --self-contained true
+          -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\innosetup.exe"
+          Start-Process "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+
+      - name: Compile installer
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.version.outputs.VERSION }}" installer.iss'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PowerMate Driver ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## PowerMate Driver ${{ steps.version.outputs.VERSION }}
+
+            ### Installation
+            1. Download `PowerMateSetup.exe` below
+            2. Run the installer
+            3. Plug in your PowerMate — the tray icon appears automatically
+
+            ### What's included
+            - Self-contained (no .NET runtime needed)
+            - Start Menu + optional desktop shortcut
+            - Uninstall via Windows Settings
+          files: installer_output/PowerMateSetup.exe
+          draft: false
+          prerelease: false
