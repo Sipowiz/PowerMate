@@ -192,8 +192,12 @@ public partial class App : MauiWinUIApplication
             {
                 if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
                 {
-                    var audio = services.GetService<IAudioService>();
-                    SetWindowIcon(w, audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
+                    // Defer to Low priority so it runs after WinUI sets its default icon
+                    _dq.TryEnqueue(DispatcherQueuePriority.Low, () =>
+                    {
+                        var audio = services.GetService<IAudioService>();
+                        SetWindowIcon(w, audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
+                    });
                 }
             };
 
@@ -226,7 +230,7 @@ public partial class App : MauiWinUIApplication
             _creditsWindow.HandlerChanged += (_, _) =>
             {
                 if (_creditsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
-                    SetWindowIcon(w, 0f, false);
+                    _dq.TryEnqueue(DispatcherQueuePriority.Low, () => SetWindowIcon(w, 0f, false));
             };
 
             (IPlatformApplication.Current?.Application as MauiControlsApp)
