@@ -7,6 +7,7 @@ namespace PowerMate.Services;
 public class AudioService : IAudioService
 {
     private readonly MMDeviceEnumerator _enumerator = new();
+    private MMDevice? _device;
     private AudioEndpointVolume? _endpointVolume;
 
     public event Action<float, bool>? VolumeChanged;
@@ -28,9 +29,8 @@ public class AudioService : IAudioService
         {
             if (_endpointVolume == null)
             {
-                _endpointVolume = _enumerator
-                    .GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
-                    .AudioEndpointVolume;
+                _device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                _endpointVolume = _device.AudioEndpointVolume;
                 _endpointVolume.OnVolumeNotification += data =>
                     VolumeChanged?.Invoke(data.MasterVolume, data.Muted);
             }
@@ -53,9 +53,12 @@ public class AudioService : IAudioService
         ep.Mute = !ep.Mute;
     }
 
-    public float GetPeakLevel() =>
-        _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
-                   .AudioMeterInformation.MasterPeakValue;
+    public float GetPeakLevel()
+    {
+        // Access through cached _device to avoid creating new MMDevice each call
+        _ = Endpoint; // ensure _device is initialized
+        return _device!.AudioMeterInformation.MasterPeakValue;
+    }
 
     // ── Bass capture ──────────────────────────────────────────────────────────
     public float GetBassPeak() => _bassPeak;
@@ -134,6 +137,7 @@ public class AudioService : IAudioService
     public void Dispose()
     {
         StopBassCapture();
+        _device?.Dispose();
         _enumerator.Dispose();
     }
 }
