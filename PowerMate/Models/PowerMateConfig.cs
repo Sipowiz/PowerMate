@@ -19,6 +19,8 @@ public class PowerMateConfig
     public int BassFrequencyCutoff { get; set; } = 250;
     public float BassGain { get; set; } = 5.0f;
     public bool StartWithWindows { get; set; } = false;
+    public int WindowX { get; set; } = -1;
+    public int WindowY { get; set; } = -1;
 
     private static readonly string ConfigPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

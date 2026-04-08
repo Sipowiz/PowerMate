@@ -29,6 +29,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IHidService, HidService>();
         builder.Services.AddSingleton<IAudioService, AudioService>();
         builder.Services.AddSingleton<PowerMateController>();
+        builder.Services.AddSingleton<UpdateService>();
         builder.Services.AddTransient<SettingsViewModel>();
         builder.Services.AddTransient<SettingsPage>();
 

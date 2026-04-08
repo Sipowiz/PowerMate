@@ -23,13 +23,14 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer_output
 OutputBaseFilename=PowerMateSetup
-SetupIconFile={#PublishDir}\appicon.ico
+SetupIconFile={#PublishDir}\powermate.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\appicon.ico
+UninstallDisplayIcon={app}\powermate.ico
 CloseApplications=force
 RestartApplications=no
 

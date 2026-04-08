@@ -22,6 +22,7 @@
     <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#1E1E2E" />
     <MauiFont Include="Resources\Fonts\*" />
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="Resources\AppIcon\powermate.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -21,6 +21,7 @@ public partial class App : MauiWinUIApplication
 {
     private TaskbarIcon? _trayIcon;
     private MauiWindow? _settingsWindow;
+    private MauiWindow? _creditsWindow;
     private DispatcherQueue _dq = null!;
 
     public App()
@@ -48,7 +49,11 @@ public partial class App : MauiWinUIApplication
         var mauiApp = IPlatformApplication.Current?.Application as MauiControlsApp;
         var mauiWindow = mauiApp?.Windows.FirstOrDefault();
         if (mauiWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
+        {
+            if (File.Exists(_staticIcoPath))
+                win.AppWindow.SetIcon(_staticIcoPath);
             win.AppWindow?.Hide();
+        }
     }
 
     private void SetupTrayIcon()
@@ -71,6 +76,10 @@ public partial class App : MauiWinUIApplication
             var settingsItem = new WinMenuFlyoutItem { Text = "Settings" };
             settingsItem.Click += (_, _) => OpenSettingsWindow();
             flyout.Items.Add(settingsItem);
+
+            var aboutItem = new WinMenuFlyoutItem { Text = "About" };
+            aboutItem.Click += (_, _) => OpenCreditsWindow();
+            flyout.Items.Add(aboutItem);
 
             flyout.Items.Add(new WinMenuFlyoutSeparator());
 
@@ -141,6 +150,7 @@ public partial class App : MauiWinUIApplication
             var services = MauiProgram.Current?.Services;
             if (services == null) return;
 
+            var config = services.GetRequiredService<PowerMate.Models.PowerMateConfig>();
             var page = services.GetRequiredService<SettingsPage>();
             _settingsWindow = new MauiWindow(page)
             {
@@ -150,17 +160,81 @@ public partial class App : MauiWinUIApplication
                 MinimumWidth = 400,
                 MinimumHeight = 560,
             };
-            _settingsWindow.Destroying += (_, _) => _settingsWindow = null;
+
+            if (config.WindowX >= 0 && config.WindowY >= 0)
+            {
+                _settingsWindow.X = config.WindowX;
+                _settingsWindow.Y = config.WindowY;
+            }
+
+            _settingsWindow.Destroying += (_, _) =>
+            {
+                // Save window position before closing
+                if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
+                {
+                    var pos = w.AppWindow.Position;
+                    config.WindowX = pos.X;
+                    config.WindowY = pos.Y;
+                    config.Save();
+                }
+                _settingsWindow = null;
+            };
             _settingsWindow.HandlerChanged += (s, _) =>
             {
-                var audio = MauiProgram.Current?.Services?.GetService<IAudioService>();
-                UpdateWindowIcon(audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
+                if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
+                {
+                    // Set static icon immediately so the taskbar never shows .NET logo
+                    if (File.Exists(_staticIcoPath))
+                        w.AppWindow.SetIcon(_staticIcoPath);
+
+                    // Then update to live volume icon
+                    var audio = services.GetService<IAudioService>();
+                    UpdateWindowIcon(audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
+                }
             };
 
             (IPlatformApplication.Current?.Application as MauiControlsApp)
                 ?.OpenWindow(_settingsWindow);
         });
     }
+
+    private void OpenCreditsWindow()
+    {
+        _dq.TryEnqueue(() =>
+        {
+            if (_creditsWindow != null)
+            {
+                if (_creditsWindow.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
+                    win.Activate();
+                return;
+            }
+
+            var page = new CreditsPage();
+            _creditsWindow = new MauiWindow(page)
+            {
+                Title = "About PowerMate",
+                Width = 380,
+                Height = 400,
+                MinimumWidth = 320,
+                MinimumHeight = 360,
+            };
+            _creditsWindow.Destroying += (_, _) => _creditsWindow = null;
+            _creditsWindow.HandlerChanged += (_, _) =>
+            {
+                if (_creditsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
+                {
+                    if (File.Exists(_staticIcoPath))
+                        w.AppWindow.SetIcon(_staticIcoPath);
+                }
+            };
+
+            (IPlatformApplication.Current?.Application as MauiControlsApp)
+                ?.OpenWindow(_creditsWindow);
+        });
+    }
+
+    private static readonly string _staticIcoPath =
+        Path.Combine(AppContext.BaseDirectory, "Resources", "AppIcon", "powermate.ico");
 
     private static readonly string _windowIcoPath =
         Path.Combine(Path.GetTempPath(), "powermate_window.ico");

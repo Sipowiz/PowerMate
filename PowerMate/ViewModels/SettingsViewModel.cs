@@ -9,6 +9,7 @@ public class SettingsViewModel : INotifyPropertyChanged
 {
     private readonly PowerMateController _controller;
     private readonly IAudioService _audio;
+    private readonly UpdateService _updateService;
     private PowerMateConfig _config;
     private Timer? _saveTimer;
     private const int SaveDebounceMs = 400;
@@ -20,11 +21,12 @@ public class SettingsViewModel : INotifyPropertyChanged
     public List<string> TripleClickActions { get; } = ["Previous Track", "Play / Pause", "Mute", "None"];
     public List<string> LongPressActions { get; } = ["Mute", "Play / Pause", "None"];
 
-    public SettingsViewModel(PowerMateController controller, IAudioService audio, PowerMateConfig config)
+    public SettingsViewModel(PowerMateController controller, IAudioService audio, PowerMateConfig config, UpdateService updateService)
     {
         _controller = controller;
         _audio = audio;
         _config = config;
+        _updateService = updateService;
 
         controller.VolumeChanged += (level, muted) =>
         {
@@ -174,6 +176,39 @@ public class SettingsViewModel : INotifyPropertyChanged
     {
         get => _config.StartWithWindows;
         set { _config.StartWithWindows = value; Notify(); }
+    }
+
+    // ── Updates ───────────────────────────────────────────────────────────────
+    private bool _updateAvailable;
+    public bool UpdateAvailable
+    {
+        get => _updateAvailable;
+        private set { if (_updateAvailable != value) { _updateAvailable = value; OnPropertyChanged(nameof(UpdateAvailable)); } }
+    }
+
+    private string _updateVersion = "";
+    public string UpdateVersion
+    {
+        get => _updateVersion;
+        private set { _updateVersion = value; OnPropertyChanged(nameof(UpdateVersion)); OnPropertyChanged(nameof(UpdateText)); }
+    }
+
+    private string _updateUrl = "";
+    public string UpdateUrl
+    {
+        get => _updateUrl;
+        private set { _updateUrl = value; OnPropertyChanged(nameof(UpdateUrl)); }
+    }
+
+    public string UpdateText => _updateAvailable ? $"Version {_updateVersion} available" : "You're up to date";
+    public Color UpdateTextColor => _updateAvailable ? Color.FromArgb("#0A84FF") : Color.FromArgb("#8E8E93");
+
+    public async Task CheckForUpdatesAsync()
+    {
+        var (available, version, url) = await _updateService.CheckForUpdateAsync();
+        UpdateAvailable = available;
+        UpdateVersion = version;
+        UpdateUrl = url;
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────

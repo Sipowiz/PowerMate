@@ -241,6 +241,21 @@
                         <Switch Grid.Column="1" IsToggled="{Binding StartWithWindows}"
                                 OnColor="#0A84FF" />
                     </Grid>
+
+                    <!-- Update check -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Updates" TextColor="#EBEBF5" FontSize="15" />
+                            <Label Text="{Binding UpdateText}"
+                                   TextColor="{Binding UpdateTextColor}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Download"
+                                IsVisible="{Binding UpdateAvailable}"
+                                Clicked="OnDownloadUpdateClicked"
+                                BackgroundColor="#0A84FF" TextColor="White"
+                                CornerRadius="8" HeightRequest="36"
+                                Padding="12,0" FontSize="13" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 

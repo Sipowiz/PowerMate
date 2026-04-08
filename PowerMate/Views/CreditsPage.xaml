@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PowerMate.Views.CreditsPage"
+             Title="About PowerMate"
+             BackgroundColor="#1C1C1E">
+
+    <VerticalStackLayout Padding="32,40" Spacing="20" VerticalOptions="Center" HorizontalOptions="Center">
+
+        <!-- App name -->
+        <Label Text="PowerMate Driver"
+               FontSize="28" FontAttributes="Bold"
+               TextColor="#EBEBF5" HorizontalOptions="Center" />
+
+        <Label Text="A native Windows driver for the Griffin PowerMate USB knob."
+               FontSize="14" TextColor="#8E8E93"
+               HorizontalOptions="Center" HorizontalTextAlignment="Center" />
+
+        <!-- Version -->
+        <Label x:Name="VersionLabel"
+               FontSize="13" TextColor="#636366"
+               HorizontalOptions="Center" />
+
+        <!-- Divider -->
+        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="FillAndExpand" />
+
+        <!-- Links -->
+        <VerticalStackLayout Spacing="12" HorizontalOptions="Center">
+
+            <Label Text="GitHub"
+                   FontSize="15" TextColor="#0A84FF"
+                   HorizontalOptions="Center"
+                   TextDecorations="Underline">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnGitHubTapped" />
+                </Label.GestureRecognizers>
+            </Label>
+
+            <Label Text="Ville Sipola — LinkedIn"
+                   FontSize="15" TextColor="#0A84FF"
+                   HorizontalOptions="Center"
+                   TextDecorations="Underline">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnLinkedInTapped" />
+                </Label.GestureRecognizers>
+            </Label>
+
+        </VerticalStackLayout>
+
+        <!-- Divider -->
+        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="FillAndExpand" />
+
+        <Label Text="Licensed under GPL-3.0"
+               FontSize="12" TextColor="#636366"
+               HorizontalOptions="Center" />
+
+    </VerticalStackLayout>
+</ContentPage>

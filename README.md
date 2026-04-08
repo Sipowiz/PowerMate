@@ -1,5 +1,20 @@
 # PowerMate Driver for Windows
 
+```
+                ╭──────────────────╮
+            ╭───┤                  ├───╮
+          ╭─┤   │    ╭────────╮    │   ├─╮
+         ╭┤ │   │   ╭┤▓▓▓▓▓▓▓▓├╮  │   │ ├╮
+         ││ │   │  ╭┤▓▓▓▓▓▓▓▓▓▓├╮ │   │ ││
+         ││ │   │  │▓▓▓▓▓▓▓▓▓▓▓▓│ │   │ ││
+         ││ │   │  ╰┤▓▓▓▓▓▓▓▓▓▓├╯ │   │ ││
+         ╰┤ │   │   ╰┤▓▓▓▓▓▓▓▓├╯  │   │ ├╯
+          ╰─┤   │    ╰────────╯    │   ├─╯
+            ╰───┤                  ├───╯
+                ╰──────────────────╯
+              ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+```
+
 A native Windows driver and settings app for the [Griffin PowerMate](https://en.wikipedia.org/wiki/Griffin_PowerMate) USB knob, built with .NET 10 and MAUI/WinUI.
 
 ![License](https://img.shields.io/github/license/Sipowiz/PowerMate)
