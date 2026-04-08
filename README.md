@@ -25,7 +25,9 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 
 ## Screenshot
 
-The settings window provides controls for volume behavior, button actions, LED modes, bass detection, and system options. The system tray icon shows a volume arc that updates in real time.
+<p align="center">
+  <img src="screenshot.png" alt="PowerMate Settings" />
+</p>
 
 ## Requirements
 
