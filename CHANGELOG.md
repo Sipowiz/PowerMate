@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-04-08
+
+### Fixed
+- Taskbar icon still showing .NET logo in Release builds — deferred WM_SETICON to after WinUI default icon setup
+
 ## [1.2.0] - 2026-04-08
 
 ### Added
