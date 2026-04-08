@@ -14,7 +14,6 @@ public class PowerMateController : IDisposable
     // ── Multi-tap ─────────────────────────────────────────────────────────────
     private int    _tapCount;
     private Timer? _tapTimer;
-    private const int TapWindowMs = 350;
 
     // ── Audio-peak LED pulse ──────────────────────────────────────────────────
     private Timer? _audioPulseTimer;
@@ -114,7 +113,7 @@ public class PowerMateController : IDisposable
         {
             _tapCount++;
             _tapTimer?.Dispose();
-            _tapTimer = new Timer(_ => ExecuteTaps(), null, TapWindowMs, Timeout.Infinite);
+            _tapTimer = new Timer(_ => ExecuteTaps(), null, _config.TapWindowMs, Timeout.Infinite);
         }
     }
 

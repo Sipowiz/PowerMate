@@ -127,6 +127,17 @@
                                 TitleColor="#8E8E93" MinimumWidthRequest="140" />
                     </Grid>
 
+                    <!-- Click Sensitivity (Tap Window) -->
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
+                        <Label Text="Multi-click window" TextColor="#EBEBF5" FontSize="15" />
+                        <Label Grid.Column="1" Text="{Binding TapWindowMsText}"
+                               TextColor="#0A84FF" FontSize="15" FontAttributes="Bold" />
+                        <Slider Grid.Row="1" Grid.ColumnSpan="2"
+                                Minimum="150" Maximum="800" Value="{Binding TapWindowMs}"
+                                MinimumTrackColor="#0A84FF" MaximumTrackColor="#3A3A3C"
+                                ThumbColor="#0A84FF" />
+                    </Grid>
+
                     <!-- Long Press Duration -->
                     <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4">
                         <Label Text="Long press duration" TextColor="#EBEBF5" FontSize="15" />

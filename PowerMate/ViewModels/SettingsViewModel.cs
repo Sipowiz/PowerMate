@@ -93,6 +93,13 @@ public class SettingsViewModel : INotifyPropertyChanged
         set { _config.LongPressAction = (LongPressAction)value; Notify(); }
     }
 
+    public int TapWindowMs
+    {
+        get => _config.TapWindowMs;
+        set { _config.TapWindowMs = Math.Clamp(value, 150, 800); Notify(); Notify(nameof(TapWindowMsText)); }
+    }
+    public string TapWindowMsText => $"{TapWindowMs} ms";
+
     public int LongPressMs
     {
         get => _config.LongPressMs;

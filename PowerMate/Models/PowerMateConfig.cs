@@ -11,6 +11,7 @@ public class PowerMateConfig
     public ClickAction ClickAction { get; set; } = ClickAction.PlayPause;
     public LongPressAction LongPressAction { get; set; } = LongPressAction.Mute;
     public int LongPressMs { get; set; } = 800;
+    public int TapWindowMs { get; set; } = 350;
     public DoubleClickAction DoubleClickAction { get; set; } = DoubleClickAction.NextTrack;
     public TripleClickAction TripleClickAction { get; set; } = TripleClickAction.PreviousTrack;
     public int LedBrightness { get; set; } = 128;
