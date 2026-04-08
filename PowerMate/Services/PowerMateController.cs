@@ -57,6 +57,10 @@ public class PowerMateController : IDisposable
     // ── Rotation ──────────────────────────────────────────────────────────────
     private void OnRotated(int direction)
     {
+        // Ignore rotation while a multi-tap sequence is in progress
+        // to prevent accidental knob movement from disrupting click detection
+        if (_tapCount > 0) return;
+
         int d = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
         _audio.AdjustLevel(d * step);
