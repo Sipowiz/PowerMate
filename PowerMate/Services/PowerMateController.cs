@@ -14,6 +14,7 @@ public class PowerMateController : IDisposable
     // ── Multi-tap ─────────────────────────────────────────────────────────────
     private int    _tapCount;
     private Timer? _tapTimer;
+    private int    _tapGeneration; // guards against stale timer callbacks
 
     // ── Audio-peak LED pulse ──────────────────────────────────────────────────
     private Timer? _audioPulseTimer;
@@ -73,7 +74,7 @@ public class PowerMateController : IDisposable
     {
         // Ignore rotation while a multi-tap sequence is in progress
         // to prevent accidental knob movement from disrupting click detection
-        if (_tapCount > 0) return;
+        if (Volatile.Read(ref _tapCount) > 0) return;
 
         int d = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
@@ -115,7 +116,8 @@ public class PowerMateController : IDisposable
         {
             // Cancel any pending tap sequence
             _tapTimer?.Dispose(); _tapTimer = null;
-            _tapCount = 0;
+            Interlocked.Exchange(ref _tapCount, 0);
+            Interlocked.Increment(ref _tapGeneration);
 
             if (_config.LongPressAction == LongPressAction.Mute)
             {
@@ -131,9 +133,15 @@ public class PowerMateController : IDisposable
         }
         else
         {
-            _tapCount++;
+            Interlocked.Increment(ref _tapCount);
+            int gen = Interlocked.Increment(ref _tapGeneration);
             _tapTimer?.Dispose();
-            _tapTimer = new Timer(_ => ExecuteTaps(), null, _config.TapWindowMs, Timeout.Infinite);
+            _tapTimer = new Timer(_ =>
+            {
+                // Only execute if no new taps have changed the generation
+                if (Volatile.Read(ref _tapGeneration) == gen)
+                    ExecuteTaps();
+            }, null, _config.TapWindowMs, Timeout.Infinite);
         }
     }
 
