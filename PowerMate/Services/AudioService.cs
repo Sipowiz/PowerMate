@@ -7,6 +7,9 @@ namespace PowerMate.Services;
 public class AudioService : IAudioService
 {
     private readonly MMDeviceEnumerator _enumerator = new();
+    private AudioEndpointVolume? _endpointVolume;
+
+    public event Action<float, bool>? VolumeChanged;
 
     // ── Bass detection via loopback capture + FFT ─────────────────────────────
     private WasapiLoopbackCapture? _capture;
@@ -19,8 +22,21 @@ public class AudioService : IAudioService
     private int _fftPos;
     private int _bassCutoffHz = 250;
 
-    private AudioEndpointVolume Endpoint =>
-        _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).AudioEndpointVolume;
+    private AudioEndpointVolume Endpoint
+    {
+        get
+        {
+            if (_endpointVolume == null)
+            {
+                _endpointVolume = _enumerator
+                    .GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
+                    .AudioEndpointVolume;
+                _endpointVolume.OnVolumeNotification += data =>
+                    VolumeChanged?.Invoke(data.MasterVolume, data.Muted);
+            }
+            return _endpointVolume;
+        }
+    }
 
     public float GetLevel() => Endpoint.MasterVolumeLevelScalar;
 

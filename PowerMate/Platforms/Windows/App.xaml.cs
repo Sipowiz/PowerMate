@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml;
 using PowerMate;
 using PowerMate.Services;
 using PowerMate.Views;
+using System.Runtime.InteropServices;
 using System.Windows.Input;
 using WinMenuFlyout = Microsoft.UI.Xaml.Controls.MenuFlyout;
 using WinMenuFlyoutItem = Microsoft.UI.Xaml.Controls.MenuFlyoutItem;
@@ -23,6 +24,15 @@ public partial class App : MauiWinUIApplication
     private MauiWindow? _settingsWindow;
     private MauiWindow? _creditsWindow;
     private DispatcherQueue _dq = null!;
+
+    // Win32 for setting window icon directly via HICON handle
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetActiveWindow();
+    private const int WM_SETICON = 0x0080;
+    private const int ICON_SMALL = 0;
+    private const int ICON_BIG   = 1;
 
     public App()
     {
@@ -50,8 +60,7 @@ public partial class App : MauiWinUIApplication
         var mauiWindow = mauiApp?.Windows.FirstOrDefault();
         if (mauiWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
         {
-            if (File.Exists(_staticIcoPath))
-                win.AppWindow.SetIcon(_staticIcoPath);
+            SetWindowIcon(win, 0f, false);
             win.AppWindow?.Hide();
         }
     }
@@ -183,13 +192,8 @@ public partial class App : MauiWinUIApplication
             {
                 if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
                 {
-                    // Set static icon immediately so the taskbar never shows .NET logo
-                    if (File.Exists(_staticIcoPath))
-                        w.AppWindow.SetIcon(_staticIcoPath);
-
-                    // Then update to live volume icon
                     var audio = services.GetService<IAudioService>();
-                    UpdateWindowIcon(audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
+                    SetWindowIcon(w, audio?.GetLevel() ?? 0f, audio?.IsMuted() ?? false);
                 }
             };
 
@@ -222,10 +226,7 @@ public partial class App : MauiWinUIApplication
             _creditsWindow.HandlerChanged += (_, _) =>
             {
                 if (_creditsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window w)
-                {
-                    if (File.Exists(_staticIcoPath))
-                        w.AppWindow.SetIcon(_staticIcoPath);
-                }
+                    SetWindowIcon(w, 0f, false);
             };
 
             (IPlatformApplication.Current?.Application as MauiControlsApp)
@@ -233,27 +234,31 @@ public partial class App : MauiWinUIApplication
         });
     }
 
-    private static readonly string _staticIcoPath =
-        Path.Combine(AppContext.BaseDirectory, "Resources", "AppIcon", "powermate.ico");
+    private static IntPtr GetHwnd(Microsoft.UI.Xaml.Window win)
+    {
+        var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(win);
+        return windowHandle;
+    }
 
-    private static readonly string _windowIcoPath =
-        Path.Combine(Path.GetTempPath(), "powermate_window.ico");
+    private void SetWindowIcon(Microsoft.UI.Xaml.Window win, float volume, bool muted)
+    {
+        try
+        {
+            var hWnd = GetHwnd(win);
+            var icon = TrayIconRenderer.Render(volume, muted);
+            var hIcon = icon.Handle;
+            SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_SMALL, hIcon);
+            SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_BIG, hIcon);
+        }
+        catch { }
+    }
 
     private void UpdateWindowIcon(float volume, bool muted)
     {
         try
         {
-            if (_settingsWindow?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window win) return;
-
-            using var gdiIcon = TrayIconRenderer.Render(volume, muted);
-            using var bmp = gdiIcon.ToBitmap();
-            using (var fs = new FileStream(_windowIcoPath, FileMode.Create))
-            {
-                using var icon = System.Drawing.Icon.FromHandle(bmp.GetHicon());
-                icon.Save(fs);
-            }
-
-            win.AppWindow.SetIcon(_windowIcoPath);
+            if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
+                SetWindowIcon(win, volume, muted);
         }
         catch { }
     }

@@ -37,11 +37,14 @@ public class PowerMateController : IDisposable
         _hid.ButtonPressed    += OnButtonPressed;
         _hid.ButtonReleased   += OnButtonReleased;
         _hid.ConnectionChanged += c => ConnectionChanged?.Invoke(c);
+        _audio.VolumeChanged  += OnSystemVolumeChanged;
     }
 
     public void Start()
     {
         _hid.Start();
+        // Access audio level to ensure the volume notification listener is initialized
+        _audio.GetLevel();
         ApplyAudioPulse();
     }
 
@@ -54,6 +57,14 @@ public class PowerMateController : IDisposable
     }
 
     // ── Rotation ──────────────────────────────────────────────────────────────
+    private void OnSystemVolumeChanged(float level, bool muted)
+    {
+        if (!_config.LedPulseOnAudio || _volumeOverrideActive)
+            _hid.SetLed((byte)(level * 255));
+
+        VolumeChanged?.Invoke(level, muted);
+    }
+
     private void OnRotated(int direction)
     {
         // Ignore rotation while a multi-tap sequence is in progress
