@@ -26,7 +26,7 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 ## Screenshot
 
 <p align="center">
-  <img src="screenshot.png" alt="PowerMate Settings" />
+  <img src="Screenshot.png" alt="PowerMate Settings" />
 </p>
 
 ## Requirements
