@@ -22,7 +22,7 @@
                HorizontalOptions="Center" />
 
         <!-- Divider -->
-        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="FillAndExpand" />
+        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="Fill" />
 
         <!-- Links -->
         <VerticalStackLayout Spacing="12" HorizontalOptions="Center">
@@ -48,7 +48,7 @@
         </VerticalStackLayout>
 
         <!-- Divider -->
-        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="FillAndExpand" />
+        <BoxView HeightRequest="1" Color="#3A3A3C" Margin="0,8" HorizontalOptions="Fill" />
 
         <Label Text="Licensed under GPL-3.0"
                FontSize="12" TextColor="#636366"

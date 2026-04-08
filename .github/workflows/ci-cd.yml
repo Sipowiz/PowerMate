@@ -18,6 +18,7 @@ env:
   DOTNET_VERSION: '10.x'
   TARGET_FRAMEWORK: 'net10.0-windows10.0.19041.0'
   BUILD_CONFIG: 'Release'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   # ── Build & Test ─────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ public class PowerMateController : IDisposable
     private Timer? _audioPulseTimer;
     private Timer? _volumeOverrideTimer;
     private volatile bool _volumeOverrideActive;
+    private volatile bool _selfChanging; // suppress feedback from our own volume changes
     private const int VolumeOverrideMs = 2000;
 
     // (volume 0-1, isMuted)
@@ -59,6 +60,9 @@ public class PowerMateController : IDisposable
     // ── Rotation ──────────────────────────────────────────────────────────────
     private void OnSystemVolumeChanged(float level, bool muted)
     {
+        // Ignore notifications caused by our own AdjustLevel/ToggleMute calls
+        if (_selfChanging) return;
+
         if (!_config.LedPulseOnAudio || _volumeOverrideActive)
             _hid.SetLed((byte)(level * 255));
 
@@ -73,7 +77,10 @@ public class PowerMateController : IDisposable
 
         int d = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
+
+        _selfChanging = true;
         _audio.AdjustLevel(d * step);
+        _selfChanging = false;
 
         float level = _audio.GetLevel();
         bool  muted = _audio.IsMuted();
@@ -112,7 +119,9 @@ public class PowerMateController : IDisposable
 
             if (_config.LongPressAction == LongPressAction.Mute)
             {
+                _selfChanging = true;
                 _audio.ToggleMute();
+                _selfChanging = false;
                 VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
             }
             else if (_config.LongPressAction == LongPressAction.PlayPause)
@@ -140,8 +149,7 @@ public class PowerMateController : IDisposable
                         MediaKeyService.PlayPause();
                         break;
                     case ClickAction.Mute:
-                        _audio.ToggleMute();
-                        VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
+                        DoToggleMute();
                         break;
                 }
                 break;
@@ -155,8 +163,7 @@ public class PowerMateController : IDisposable
                         MediaKeyService.PlayPause();
                         break;
                     case DoubleClickAction.Mute:
-                        _audio.ToggleMute();
-                        VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
+                        DoToggleMute();
                         break;
                 }
                 break;
@@ -170,12 +177,19 @@ public class PowerMateController : IDisposable
                         MediaKeyService.PlayPause();
                         break;
                     case TripleClickAction.Mute:
-                        _audio.ToggleMute();
-                        VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
+                        DoToggleMute();
                         break;
                 }
                 break;
         }
+    }
+
+    private void DoToggleMute()
+    {
+        _selfChanging = true;
+        _audio.ToggleMute();
+        _selfChanging = false;
+        VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
     }
 
     // ── Audio-peak LED pulse ──────────────────────────────────────────────────
