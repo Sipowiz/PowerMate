@@ -118,6 +118,10 @@ dotnet test PowerMate.Tests/PowerMate.Tests.csproj
 
 GitHub Actions builds and tests on every push to `main`. Pushing a version tag (e.g., `v1.0.0`) triggers a release build that compiles the installer and publishes it as a GitHub Release.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes per release.
+
 ## License
 
 This project is licensed under the [GPL-3.0 License](LICENSE).
