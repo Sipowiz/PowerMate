@@ -61,10 +61,10 @@ Settings are stored in `%APPDATA%\PowerMate\config.json` and are auto-saved when
 | VolumeStep | 2 | Volume change per knob tick |
 | Sensitivity | 1.0 | Rotation sensitivity multiplier |
 | InvertRotation | false | Reverse rotation direction |
-| ClickAction | PlayPause | Single click: PlayPause, Mute, or None |
-| DoubleClickAction | NextTrack | Double click: NextTrack, PlayPause, Mute, or None |
-| TripleClickAction | PreviousTrack | Triple click: PreviousTrack, PlayPause, Mute, or None |
-| LongPressAction | Mute | Long press: Mute, PlayPause, or None |
+| ClickAction | PlayPause | Single click: PlayPause, Mute/Unmute, or None |
+| DoubleClickAction | NextTrack | Double click: NextTrack, PlayPause, Mute/Unmute, or None |
+| TripleClickAction | PreviousTrack | Triple click: PreviousTrack, PlayPause, Mute/Unmute, or None |
+| LongPressAction | Mute | Long press: Mute/Unmute, PlayPause, or None |
 | LongPressMs | 800 | Long press threshold in milliseconds |
 | LedBrightness | 128 | Base LED brightness (0–255) |
 | LedPulseOnAudio | false | Pulse LED to audio output |

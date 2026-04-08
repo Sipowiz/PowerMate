@@ -16,10 +16,10 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public List<string> ClickActions { get; } = ["Play / Pause", "Mute", "None"];
-    public List<string> DoubleClickActions { get; } = ["Next Track", "Play / Pause", "Mute", "None"];
-    public List<string> TripleClickActions { get; } = ["Previous Track", "Play / Pause", "Mute", "None"];
-    public List<string> LongPressActions { get; } = ["Mute", "Play / Pause", "None"];
+    public List<string> ClickActions { get; } = ["Play / Pause", "Mute / Unmute", "None"];
+    public List<string> DoubleClickActions { get; } = ["Next Track", "Play / Pause", "Mute / Unmute", "None"];
+    public List<string> TripleClickActions { get; } = ["Previous Track", "Play / Pause", "Mute / Unmute", "None"];
+    public List<string> LongPressActions { get; } = ["Mute / Unmute", "Play / Pause", "None"];
 
     public SettingsViewModel(PowerMateController controller, IAudioService audio, PowerMateConfig config, UpdateService updateService)
     {

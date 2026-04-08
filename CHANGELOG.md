@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-04-08
+
+### Added
+- Configurable multi-click window (tap sensitivity) slider (150–800ms)
+- System volume change monitoring — LED and tray icon update when volume is changed from other apps
+- Rotation suppression during multi-tap sequences to prevent dropped clicks
+
+### Changed
+- "Mute" renamed to "Mute / Unmute" in all action pickers for clarity
+
+### Fixed
+- Volume control stopping after extended use (COM reference invalidation due to GC collecting MMDevice)
+- Multi-tap race condition causing inconsistent double/triple click detection
+- Taskbar icon not displaying in Release builds (switched from file-based SetIcon to WM_SETICON with HICON handle)
+- Volume feedback loop when system notifications re-triggered our own changes
+
 ## [1.1.0] - 2026-04-08
 
 ### Added
