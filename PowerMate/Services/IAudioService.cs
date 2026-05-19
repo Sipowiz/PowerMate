@@ -9,8 +9,9 @@ public interface IAudioService : IDisposable
     void ToggleMute();
     float GetPeakLevel();
     float GetBassPeak();
+    void StartPeakCapture();
     void StartBassCapture(int cutoffHz, float gain);
-    void StopBassCapture();
+    void StopCapture();
 
     /// <summary>Fired when the system volume or mute state changes from any source.</summary>
     event Action<float, bool>? VolumeChanged;

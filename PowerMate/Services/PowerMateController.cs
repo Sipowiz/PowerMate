@@ -2,51 +2,69 @@ using PowerMate.Models;
 
 namespace PowerMate.Services;
 
+public enum InteractionMode { Idle, Volume, Button, FfRw }
+
 public class PowerMateController : IDisposable
 {
     private readonly IHidService  _hid;
     private readonly IAudioService _audio;
+    private readonly IMediaSessionService _media;
     private PowerMateConfig _config;
 
-    private DateTime _pressTime;
-    private bool     _buttonDown;
+    // ── Button state ──────────────────────────────────────────────────────────
+    private volatile bool _buttonDown;
+    private int      _rotationStepsWhileHeld; // total steps (any direction) while held
+    private bool     _ffRwActive;
+    private volatile bool _longPressFired;
+    private Timer?   _longPressTimer;
 
     // ── Multi-tap ─────────────────────────────────────────────────────────────
     private int    _tapCount;
     private Timer? _tapTimer;
-    private int    _tapGeneration; // guards against stale timer callbacks
+    private int    _tapGeneration;
 
-    // ── Audio-peak LED pulse ──────────────────────────────────────────────────
+    // ── Interaction mode ──────────────────────────────────────────────────────
+    private InteractionMode _interactionMode = InteractionMode.Idle;
+    private Timer? _idleTimer;
+    private Timer? _ffRwLedTimer;
+    // Overridable by tests via InternalsVisibleTo.
+    internal int IdleTimeoutMs = 2000;
+
+    // ── Audio-peak LED pulse (idle) ───────────────────────────────────────────
     private Timer? _audioPulseTimer;
     private Timer? _volumeOverrideTimer;
     private volatile bool _volumeOverrideActive;
-    private volatile bool _selfChanging; // suppress feedback from our own volume changes
+    private volatile bool _selfChanging;
     private const int VolumeOverrideMs = 2000;
 
-    // (volume 0-1, isMuted)
-    public event Action<float, bool>? VolumeChanged;
-    public event Action<bool>?        ConnectionChanged;
+    public event Action<float, bool>?     VolumeChanged;
+    public event Action<bool>?            ConnectionChanged;
+    public event Action<InteractionMode>? InteractionModeChanged;
+    public event Action<PlaybackState>?   SymbolFlash;
 
     public bool IsConnected => _hid.IsConnected;
 
-    public PowerMateController(IHidService hid, IAudioService audio, PowerMateConfig config)
+    public IMediaSessionService Media => _media;
+
+    public PowerMateController(IHidService hid, IAudioService audio,
+        IMediaSessionService media, PowerMateConfig config)
     {
-        _hid   = hid;
-        _audio = audio;
+        _hid    = hid;
+        _audio  = audio;
+        _media  = media;
         _config = config;
 
-        _hid.Rotated          += OnRotated;
-        _hid.ButtonPressed    += OnButtonPressed;
-        _hid.ButtonReleased   += OnButtonReleased;
+        _hid.Rotated           += OnRotated;
+        _hid.ButtonPressed     += OnButtonPressed;
+        _hid.ButtonReleased    += OnButtonReleased;
         _hid.ConnectionChanged += c => ConnectionChanged?.Invoke(c);
-        _audio.VolumeChanged  += OnSystemVolumeChanged;
+        _audio.VolumeChanged   += OnSystemVolumeChanged;
     }
 
     public void Start()
     {
         _hid.Start();
-        // Access audio level to ensure the volume notification listener is initialized
-        _audio.GetLevel();
+        _audio.GetLevel(); // init volume endpoint / start notification listener
         ApplyAudioPulse();
     }
 
@@ -58,35 +76,87 @@ public class PowerMateController : IDisposable
             _hid.SetLed((byte)(_audio.GetLevel() * 255));
     }
 
-    // ── Rotation ──────────────────────────────────────────────────────────────
+    // ── Interaction mode ──────────────────────────────────────────────────────
+
+    private void SetInteractionMode(InteractionMode mode)
+    {
+        if (_interactionMode == mode) return;
+        _interactionMode = mode;
+        InteractionModeChanged?.Invoke(mode);
+
+        _ffRwLedTimer?.Dispose();
+        _ffRwLedTimer = null;
+
+        if (mode == InteractionMode.FfRw)
+            _ffRwLedTimer = new Timer(FfRwLedTick, null, 0, 100);
+    }
+
+    private void ResetIdleTimer()
+    {
+        _idleTimer?.Dispose();
+        _idleTimer = new Timer(_ =>
+        {
+            SetInteractionMode(InteractionMode.Idle);
+            // Restore audio pulse LED (pulse timer already running if configured;
+            // tick will no-op while not Idle, and now will resume)
+            if (!_config.LedPulseOnAudio)
+                _hid.SetLed((byte)(_audio.GetLevel() * 255));
+        }, null, IdleTimeoutMs, Timeout.Infinite);
+    }
+
+    // ── Volume change from system ─────────────────────────────────────────────
+
     private void OnSystemVolumeChanged(float level, bool muted)
     {
-        // Ignore notifications caused by our own AdjustLevel/ToggleMute calls
         if (_selfChanging) return;
-
         if (!_config.LedPulseOnAudio || _volumeOverrideActive)
             _hid.SetLed((byte)(level * 255));
-
         VolumeChanged?.Invoke(level, muted);
     }
 
+    // ── Rotation ──────────────────────────────────────────────────────────────
+
     private void OnRotated(int direction)
     {
-        // Ignore rotation while a multi-tap sequence is in progress
-        // to prevent accidental knob movement from disrupting click detection
+        if (_buttonDown)
+        {
+            Interlocked.Increment(ref _rotationStepsWhileHeld);
+
+            if (!_ffRwActive && _rotationStepsWhileHeld >= _config.FfRwThreshold)
+            {
+                _ffRwActive = true;
+                // Cancel long-press and tap timers — FF/RW takes over.
+                _longPressTimer?.Dispose(); _longPressTimer = null;
+                _tapTimer?.Dispose(); _tapTimer = null;
+                Interlocked.Exchange(ref _tapCount, 0);
+                Interlocked.Increment(ref _tapGeneration);
+                SetInteractionMode(InteractionMode.FfRw);
+            }
+
+            if (_ffRwActive)
+            {
+                int d = _config.InvertRotation ? -direction : direction;
+                _ = _media.SeekRelativeAsync(
+                    TimeSpan.FromSeconds(d * _config.FfRwStepSeconds));
+                // FF/RW stays active while the button is held; button release handles exit.
+            }
+            return;
+        }
+
+        // Normal volume – ignore during multi-tap window
         if (Volatile.Read(ref _tapCount) > 0) return;
 
-        int d = _config.InvertRotation ? -direction : direction;
+        int delta = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
 
         _selfChanging = true;
-        _audio.AdjustLevel(d * step);
+        _audio.AdjustLevel(delta * step);
         _selfChanging = false;
 
-        float level = _audio.GetLevel();
+        float vol   = _audio.GetLevel();
         bool  muted = _audio.IsMuted();
 
-        _hid.SetLed((byte)(level * 255));
+        _hid.SetLed((byte)(vol * 255));
         if (_config.LedPulseOnAudio)
         {
             _volumeOverrideActive = true;
@@ -95,14 +165,40 @@ public class PowerMateController : IDisposable
                 null, VolumeOverrideMs, Timeout.Infinite);
         }
 
-        VolumeChanged?.Invoke(level, muted);
+        VolumeChanged?.Invoke(vol, muted);
+        SetInteractionMode(InteractionMode.Volume);
+        ResetIdleTimer();
     }
 
     // ── Button ────────────────────────────────────────────────────────────────
+
     private void OnButtonPressed()
     {
-        _buttonDown = true;
-        _pressTime  = DateTime.UtcNow;
+        _buttonDown             = true;
+        _rotationStepsWhileHeld = 0;
+        _ffRwActive               = false;
+        _longPressFired           = false;
+
+        // Cancel idle timer while button is held
+        _idleTimer?.Dispose();
+        _idleTimer = null;
+
+        // Fire mute immediately when the long-press threshold is crossed,
+        // so the user gets audio feedback without waiting for release.
+        _longPressTimer?.Dispose();
+        _longPressTimer = new Timer(_ =>
+        {
+            if (_buttonDown && !_ffRwActive && !_longPressFired)
+            {
+                _longPressFired = true;
+                _tapTimer?.Dispose(); _tapTimer = null;
+                Interlocked.Exchange(ref _tapCount, 0);
+                Interlocked.Increment(ref _tapGeneration);
+                DoToggleMute();
+            }
+        }, null, _config.LongPressMs, Timeout.Infinite);
+
+        SetInteractionMode(InteractionMode.Button);
     }
 
     private void OnButtonReleased()
@@ -110,39 +206,40 @@ public class PowerMateController : IDisposable
         if (!_buttonDown) return;
         _buttonDown = false;
 
-        bool isLong = (DateTime.UtcNow - _pressTime).TotalMilliseconds >= _config.LongPressMs;
+        _longPressTimer?.Dispose();
+        _longPressTimer = null;
 
-        if (isLong)
+        if (_ffRwActive)
         {
-            // Cancel any pending tap sequence
-            _tapTimer?.Dispose(); _tapTimer = null;
-            Interlocked.Exchange(ref _tapCount, 0);
-            Interlocked.Increment(ref _tapGeneration);
+            _ffRwActive = false;
+            SetInteractionMode(InteractionMode.Idle);
+            if (!_config.LedPulseOnAudio)
+                _hid.SetLed((byte)(_audio.GetLevel() * 255));
+            return;
+        }
 
-            if (_config.LongPressAction == LongPressAction.Mute)
-            {
-                _selfChanging = true;
-                _audio.ToggleMute();
-                _selfChanging = false;
-                VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
-            }
-            else if (_config.LongPressAction == LongPressAction.PlayPause)
-            {
-                MediaKeyService.PlayPause();
-            }
-        }
-        else
+        if (_longPressFired)
         {
-            Interlocked.Increment(ref _tapCount);
-            int gen = Interlocked.Increment(ref _tapGeneration);
-            _tapTimer?.Dispose();
-            _tapTimer = new Timer(_ =>
-            {
-                // Only execute if no new taps have changed the generation
-                if (Volatile.Read(ref _tapGeneration) == gen)
-                    ExecuteTaps();
-            }, null, _config.TapWindowMs, Timeout.Infinite);
+            // Action already executed; wait for release was the only requirement.
+            _longPressFired = false;
+            ResetIdleTimer();
+            return;
         }
+
+        // Short tap
+        Interlocked.Increment(ref _tapCount);
+        int gen = Interlocked.Increment(ref _tapGeneration);
+        _tapTimer?.Dispose();
+        _tapTimer = new Timer(_ =>
+        {
+            if (Volatile.Read(ref _tapGeneration) != gen) return;
+            if (!_buttonDown)
+                ExecuteTaps();
+            else
+                Interlocked.Exchange(ref _tapCount, 0); // discard taps that straddle a held press
+        }, null, _config.TapWindowMs, Timeout.Infinite);
+
+        ResetIdleTimer();
     }
 
     private void ExecuteTaps()
@@ -151,43 +248,15 @@ public class PowerMateController : IDisposable
         switch (count)
         {
             case 1:
-                switch (_config.ClickAction)
-                {
-                    case ClickAction.PlayPause:
-                        MediaKeyService.PlayPause();
-                        break;
-                    case ClickAction.Mute:
-                        DoToggleMute();
-                        break;
-                }
+                MediaKeyService.PlayPause();
                 break;
             case 2:
-                switch (_config.DoubleClickAction)
-                {
-                    case DoubleClickAction.NextTrack:
-                        MediaKeyService.NextTrack();
-                        break;
-                    case DoubleClickAction.PlayPause:
-                        MediaKeyService.PlayPause();
-                        break;
-                    case DoubleClickAction.Mute:
-                        DoToggleMute();
-                        break;
-                }
+                MediaKeyService.NextTrack();
+                SymbolFlash?.Invoke(PlaybackState.SkipNext);
                 break;
             case >= 3:
-                switch (_config.TripleClickAction)
-                {
-                    case TripleClickAction.PreviousTrack:
-                        MediaKeyService.PreviousTrack();
-                        break;
-                    case TripleClickAction.PlayPause:
-                        MediaKeyService.PlayPause();
-                        break;
-                    case TripleClickAction.Mute:
-                        DoToggleMute();
-                        break;
-                }
+                MediaKeyService.PreviousTrack();
+                SymbolFlash?.Invoke(PlaybackState.SkipPrev);
                 break;
         }
     }
@@ -200,7 +269,17 @@ public class PowerMateController : IDisposable
         VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
     }
 
-    // ── Audio-peak LED pulse ──────────────────────────────────────────────────
+    // ── FF/RW LED tick ────────────────────────────────────────────────────────
+
+    private void FfRwLedTick(object? _)
+    {
+        if (!_hid.IsConnected) return;
+        float pos = _media.GetPlaybackPosition();
+        _hid.SetLed((byte)(pos * 255));
+    }
+
+    // ── Audio-peak LED pulse (idle mode) ──────────────────────────────────────
+
     private void ApplyAudioPulse()
     {
         if (_config.LedPulseOnAudio)
@@ -208,21 +287,25 @@ public class PowerMateController : IDisposable
             if (_config.LedBassOnly)
                 _audio.StartBassCapture(_config.BassFrequencyCutoff, _config.BassGain);
             else
-                _audio.StopBassCapture();
+                _audio.StartPeakCapture();
 
-            _audioPulseTimer ??= new Timer(AudioPulseTick, null, 0, 80);
+            _audioPulseTimer ??= new Timer(AudioPulseTick, null, 0, 20);
         }
         else
         {
             _audioPulseTimer?.Dispose();
             _audioPulseTimer = null;
-            _audio.StopBassCapture();
+            _audio.StopCapture();
         }
     }
 
     private void AudioPulseTick(object? _)
     {
-        if (!_hid.IsConnected || _volumeOverrideActive) return;
+        // Only drive LED from audio when we're truly idle and not in a volume override
+        if (!_hid.IsConnected
+            || _volumeOverrideActive
+            || _interactionMode != InteractionMode.Idle) return;
+
         float peak = _config.LedBassOnly
             ? _audio.GetBassPeak()
             : _audio.GetPeakLevel();
@@ -231,10 +314,14 @@ public class PowerMateController : IDisposable
 
     public void Dispose()
     {
+        _longPressTimer?.Dispose();
         _tapTimer?.Dispose();
         _volumeOverrideTimer?.Dispose();
         _audioPulseTimer?.Dispose();
+        _ffRwLedTimer?.Dispose();
+        _idleTimer?.Dispose();
         _hid.Dispose();
         _audio.Dispose();
+        _media.Dispose();
     }
 }

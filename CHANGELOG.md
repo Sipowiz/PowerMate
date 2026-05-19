@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-05-19
+
+### Added
+- Fast-forward / rewind by holding button and rotating, with configurable seek step (1–30s)
+- Interaction mode system (Idle, Volume, Button, FF/RW) with tray icon state reflection
+- SMTC media session integration — playback state tracking and symbol flash on skip
+- FF/RW seek step slider in settings UI
+
+### Changed
+- Button actions simplified to fixed mapping (click=play/pause, double=next, triple=previous, long=mute)
+- Audio-reactive LED now uses WASAPI loopback capture with RMS energy — volume-independent and near-zero latency
+- LED pulse timer reduced from 80ms to 20ms for snappier response
+- Bass mode decay tuned for sustained low-frequency glow while keeping transient punch
+
+### Fixed
+- Crash when toggling pulse LED switch (COM apartment mismatch accessing AudioMeterInformation from thread pool)
+- Config save now uses atomic write (tmp + move) to prevent corruption
+
 ## [1.2.1] - 2026-04-08
 
 ### Fixed

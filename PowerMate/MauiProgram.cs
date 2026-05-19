@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using PowerMate.Models;
 using PowerMate.Services;
 using PowerMate.ViewModels;
@@ -28,6 +28,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(_ => PowerMateConfig.Load());
         builder.Services.AddSingleton<IHidService, HidService>();
         builder.Services.AddSingleton<IAudioService, AudioService>();
+        builder.Services.AddSingleton<IMediaSessionService, MediaSessionService>();
         builder.Services.AddSingleton<PowerMateController>();
         builder.Services.AddSingleton<UpdateService>();
         builder.Services.AddTransient<SettingsViewModel>();

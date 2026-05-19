@@ -16,19 +16,15 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public List<string> ClickActions { get; } = ["Play / Pause", "Mute / Unmute", "None"];
-    public List<string> DoubleClickActions { get; } = ["Next Track", "Play / Pause", "Mute / Unmute", "None"];
-    public List<string> TripleClickActions { get; } = ["Previous Track", "Play / Pause", "Mute / Unmute", "None"];
-    public List<string> LongPressActions { get; } = ["Mute / Unmute", "Play / Pause", "None"];
-
-    public SettingsViewModel(PowerMateController controller, IAudioService audio, PowerMateConfig config, UpdateService updateService)
+    public SettingsViewModel(PowerMateController controller, IAudioService audio,
+        PowerMateConfig config, UpdateService updateService)
     {
-        _controller = controller;
-        _audio = audio;
-        _config = config;
+        _controller    = controller;
+        _audio         = audio;
+        _config        = config;
         _updateService = updateService;
 
-        controller.VolumeChanged += (level, muted) =>
+        controller.VolumeChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(CurrentVolumeText));
             OnPropertyChanged(nameof(CurrentVolumePercent));
@@ -43,10 +39,12 @@ public class SettingsViewModel : INotifyPropertyChanged
 
     // ── Status ────────────────────────────────────────────────────────────────
     public bool IsConnected => _controller.IsConnected;
-    public string ConnectionStatusText => _controller.IsConnected ? "Connected" : "Disconnected";
-    public Color ConnectionStatusColor => _controller.IsConnected ? Color.FromArgb("#16C60C") : Color.FromArgb("#FF4444");
-    public string CurrentVolumeText => $"{(int)(_audio.GetLevel() * 100)}%";
-    public int CurrentVolumePercent => (int)(_audio.GetLevel() * 100);
+    public string ConnectionStatusText  => _controller.IsConnected ? "Connected" : "Disconnected";
+    public Color  ConnectionStatusColor => _controller.IsConnected
+        ? Color.FromArgb("#16C60C")
+        : Color.FromArgb("#FF4444");
+    public string CurrentVolumeText    => $"{(int)(_audio.GetLevel() * 100)}%";
+    public int    CurrentVolumePercent => (int)(_audio.GetLevel() * 100);
 
     // ── Volume ────────────────────────────────────────────────────────────────
     public int VolumeStep
@@ -58,7 +56,12 @@ public class SettingsViewModel : INotifyPropertyChanged
     public float Sensitivity
     {
         get => _config.Sensitivity;
-        set { _config.Sensitivity = (float)Math.Round(Math.Clamp(value, 0.5, 3.0), 1); Notify(); Notify(nameof(SensitivityText)); }
+        set
+        {
+            _config.Sensitivity = (float)Math.Round(Math.Clamp(value, 0.5, 3.0), 1);
+            Notify();
+            Notify(nameof(SensitivityText));
+        }
     }
     public string SensitivityText => $"{Sensitivity:0.0}×";
 
@@ -68,31 +71,7 @@ public class SettingsViewModel : INotifyPropertyChanged
         set { _config.InvertRotation = value; Notify(); }
     }
 
-    // ── Button ────────────────────────────────────────────────────────────────
-    public int ClickActionIndex
-    {
-        get => (int)_config.ClickAction;
-        set { _config.ClickAction = (ClickAction)value; Notify(); }
-    }
-
-    public int DoubleClickActionIndex
-    {
-        get => (int)_config.DoubleClickAction;
-        set { _config.DoubleClickAction = (DoubleClickAction)value; Notify(); }
-    }
-
-    public int TripleClickActionIndex
-    {
-        get => (int)_config.TripleClickAction;
-        set { _config.TripleClickAction = (TripleClickAction)value; Notify(); }
-    }
-
-    public int LongPressActionIndex
-    {
-        get => (int)_config.LongPressAction;
-        set { _config.LongPressAction = (LongPressAction)value; Notify(); }
-    }
-
+    // ── Button timing ─────────────────────────────────────────────────────────
     public int TapWindowMs
     {
         get => _config.TapWindowMs;
@@ -107,6 +86,14 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
     public string LongPressMsText => $"{LongPressMs} ms";
 
+    // ── FF/RW ─────────────────────────────────────────────────────────────────
+    public int FfRwStepSeconds
+    {
+        get => _config.FfRwStepSeconds;
+        set { _config.FfRwStepSeconds = Math.Clamp(value, 1, 30); Notify(); Notify(nameof(FfRwStepText)); }
+    }
+    public string FfRwStepText => $"{FfRwStepSeconds} s";
+
     // ── LED ───────────────────────────────────────────────────────────────────
     public int LedBrightness
     {
@@ -120,7 +107,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         get => _config.LedPulseOnAudio;
         set { _config.LedPulseOnAudio = value; Notify(); Notify(nameof(ShowBassOptions)); }
     }
-
     public bool ShowBassOptions => _config.LedPulseOnAudio;
 
     public bool LedBassOnly
@@ -128,7 +114,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         get => _config.LedBassOnly;
         set { _config.LedBassOnly = value; Notify(); Notify(nameof(ShowBassFrequency)); }
     }
-
     public bool ShowBassFrequency => _config.LedBassOnly && _config.LedPulseOnAudio;
 
     public int BassFrequencyCutoff
@@ -141,19 +126,31 @@ public class SettingsViewModel : INotifyPropertyChanged
     public float BassGain
     {
         get => _config.BassGain;
-        set { _config.BassGain = (float)Math.Round(Math.Clamp(value, 0.5, 50.0), 1); Notify(); Notify(nameof(BassGainText)); }
+        set
+        {
+            _config.BassGain = (float)Math.Round(Math.Clamp(value, 0.5, 50.0), 1);
+            Notify();
+            Notify(nameof(BassGainText));
+        }
     }
     public string BassGainText => $"{BassGain:0.0}×";
 
-    // Live bass level (0-100) for the meter bar
+    // Live bass level meter (0-100) for the settings page bar
     private int _bassLevelPercent;
     public int BassLevelPercent
     {
         get => _bassLevelPercent;
-        private set { if (_bassLevelPercent != value) { _bassLevelPercent = value; OnPropertyChanged(nameof(BassLevelPercent)); OnPropertyChanged(nameof(BassLevelText)); OnPropertyChanged(nameof(BassLevelWidth)); } }
+        private set
+        {
+            if (_bassLevelPercent == value) return;
+            _bassLevelPercent = value;
+            OnPropertyChanged(nameof(BassLevelPercent));
+            OnPropertyChanged(nameof(BassLevelText));
+            OnPropertyChanged(nameof(BassLevelWidth));
+        }
     }
-    public string BassLevelText => $"{_bassLevelPercent}%";
-    public GridLength BassLevelWidth => new(_bassLevelPercent, GridUnitType.Star);
+    public string     BassLevelText      => $"{_bassLevelPercent}%";
+    public GridLength BassLevelWidth     => new(_bassLevelPercent, GridUnitType.Star);
     public GridLength BassLevelRemaining => new(100 - _bassLevelPercent, GridUnitType.Star);
 
     private Timer? _levelPollTimer;
@@ -163,12 +160,15 @@ public class SettingsViewModel : INotifyPropertyChanged
         _levelPollTimer?.Dispose();
         _levelPollTimer = new Timer(_ =>
         {
+            int level;
             if (_config.LedBassOnly && _config.LedPulseOnAudio)
-                BassLevelPercent = (int)(_audio.GetBassPeak() * 100);
+                level = (int)(_audio.GetBassPeak() * 100);
             else if (_config.LedPulseOnAudio)
-                BassLevelPercent = (int)(_audio.GetPeakLevel() * 100);
+                level = (int)(_audio.GetPeakLevel() * 100);
             else
-                BassLevelPercent = 0;
+                level = 0;
+
+            MainThread.BeginInvokeOnMainThread(() => BassLevelPercent = level);
         }, null, 0, 80);
     }
 
@@ -186,39 +186,37 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     // ── Updates ───────────────────────────────────────────────────────────────
-    private bool _updateAvailable;
+    private bool   _updateAvailable;
+    private string _updateVersion = "";
+    private string _updateUrl     = "";
+
     public bool UpdateAvailable
     {
         get => _updateAvailable;
         private set { if (_updateAvailable != value) { _updateAvailable = value; OnPropertyChanged(nameof(UpdateAvailable)); } }
     }
-
-    private string _updateVersion = "";
     public string UpdateVersion
     {
         get => _updateVersion;
         private set { _updateVersion = value; OnPropertyChanged(nameof(UpdateVersion)); OnPropertyChanged(nameof(UpdateText)); }
     }
-
-    private string _updateUrl = "";
     public string UpdateUrl
     {
         get => _updateUrl;
         private set { _updateUrl = value; OnPropertyChanged(nameof(UpdateUrl)); }
     }
-
-    public string UpdateText => _updateAvailable ? $"Version {_updateVersion} available" : "You're up to date";
-    public Color UpdateTextColor => _updateAvailable ? Color.FromArgb("#0A84FF") : Color.FromArgb("#8E8E93");
+    public string UpdateText      => _updateAvailable ? $"Version {_updateVersion} available" : "You're up to date";
+    public Color  UpdateTextColor => _updateAvailable ? Color.FromArgb("#0A84FF") : Color.FromArgb("#8E8E93");
 
     public async Task CheckForUpdatesAsync()
     {
         var (available, version, url) = await _updateService.CheckForUpdateAsync();
         UpdateAvailable = available;
-        UpdateVersion = version;
-        UpdateUrl = url;
+        UpdateVersion   = version;
+        UpdateUrl       = url;
     }
 
-    // ── Commands ──────────────────────────────────────────────────────────────
+    // ── Auto-save ─────────────────────────────────────────────────────────────
     private void AutoSave()
     {
         _saveTimer?.Dispose();

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(Stop-Process -Name PowerMate -ErrorAction SilentlyContinue)",
+      "Bash(Start-Sleep -Milliseconds 500)",
+      "PowerShell(Stop-Process -Id 58656 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 38876 -Force -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

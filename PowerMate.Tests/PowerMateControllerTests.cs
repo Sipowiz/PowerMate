@@ -4,19 +4,38 @@ using PowerMate.Services;
 
 namespace PowerMate.Tests;
 
+/// <summary>
+/// Unit tests for PowerMateController.
+/// All hardware and audio calls go through NSubstitute mocks.
+/// </summary>
 public class PowerMateControllerTests : IDisposable
 {
-    private readonly IHidService _hid;
+    private readonly IHidService  _hid;
     private readonly IAudioService _audio;
+    private readonly IMediaSessionService _media;
     private readonly PowerMateConfig _config;
     private readonly PowerMateController _controller;
 
+    // Short timing constants so tests run fast without sacrificing accuracy.
+    private const int TapWindow  = 200;  // ms
+    private const int LongPress  = 200;  // ms
+
     public PowerMateControllerTests()
     {
-        _hid = Substitute.For<IHidService>();
+        _hid   = Substitute.For<IHidService>();
         _audio = Substitute.For<IAudioService>();
-        _config = new PowerMateConfig();
-        _controller = new PowerMateController(_hid, _audio, _config);
+        _media = Substitute.For<IMediaSessionService>();
+        _media.SeekRelativeAsync(Arg.Any<TimeSpan>()).Returns(Task.CompletedTask);
+
+        _config = new PowerMateConfig
+        {
+            TapWindowMs     = TapWindow,
+            LongPressMs     = LongPress,
+            FfRwThreshold   = 3,
+            FfRwStepSeconds = 5,
+        };
+        _controller = new PowerMateController(_hid, _audio, _media, _config);
+        _controller.IdleTimeoutMs = 300; // fast idle for timeout tests
 
         _audio.GetLevel().Returns(0.5f);
         _audio.IsMuted().Returns(false);
@@ -24,15 +43,17 @@ public class PowerMateControllerTests : IDisposable
 
     public void Dispose() => _controller.Dispose();
 
-    // ── Rotation ──────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // Rotation — volume control
+    // ══════════════════════════════════════════════════════════════════════════
 
     [Fact]
     public void Rotation_CW_AdjustsVolumeUp()
     {
         _hid.Rotated += Raise.Event<Action<int>>(1);
 
-        float expectedStep = (_config.VolumeStep / 100f) * _config.Sensitivity;
-        _audio.Received(1).AdjustLevel(expectedStep);
+        float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
+        _audio.Received(1).AdjustLevel(step);
     }
 
     [Fact]
@@ -40,8 +61,8 @@ public class PowerMateControllerTests : IDisposable
     {
         _hid.Rotated += Raise.Event<Action<int>>(-1);
 
-        float expectedStep = (_config.VolumeStep / 100f) * _config.Sensitivity;
-        _audio.Received(1).AdjustLevel(-expectedStep);
+        float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
+        _audio.Received(1).AdjustLevel(-step);
     }
 
     [Fact]
@@ -52,252 +73,582 @@ public class PowerMateControllerTests : IDisposable
 
         _hid.Rotated += Raise.Event<Action<int>>(1);
 
-        float expectedStep = (_config.VolumeStep / 100f) * _config.Sensitivity;
-        _audio.Received(1).AdjustLevel(-expectedStep);
+        float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
+        _audio.Received(1).AdjustLevel(-step);
     }
 
     [Fact]
-    public void Rotation_SetsLedToBrightness()
+    public void Rotation_CustomStep_UsesConfigValues()
     {
-        _audio.GetLevel().Returns(0.75f);
+        _config.VolumeStep  = 5;
+        _config.Sensitivity = 2.0f;
+        _controller.UpdateConfig(_config);
 
         _hid.Rotated += Raise.Event<Action<int>>(1);
 
+        _audio.Received(1).AdjustLevel((5 / 100f) * 2.0f);
+    }
+
+    [Fact]
+    public void Rotation_SetsLedToCurrentVolume()
+    {
+        _audio.GetLevel().Returns(0.75f);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
         _hid.Received().SetLed((byte)(0.75f * 255));
     }
 
     [Fact]
     public void Rotation_FiresVolumeChangedEvent()
     {
-        float reportedLevel = -1;
-        bool reportedMuted = true;
-        _controller.VolumeChanged += (level, muted) =>
-        {
-            reportedLevel = level;
-            reportedMuted = muted;
-        };
+        float level = -1; bool muted = true;
+        _controller.VolumeChanged += (l, m) => { level = l; muted = m; };
 
         _hid.Rotated += Raise.Event<Action<int>>(1);
 
-        Assert.Equal(0.5f, reportedLevel);
-        Assert.False(reportedMuted);
+        Assert.Equal(0.5f, level);
+        Assert.False(muted);
     }
 
     [Fact]
-    public void Rotation_CustomStep_UsesConfigValues()
+    public void MultipleRotations_EachAdjustsVolumeOnce()
     {
-        _config.VolumeStep = 5;
-        _config.Sensitivity = 2.0f;
-        _controller.UpdateConfig(_config);
+        float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
+
+        for (int i = 0; i < 4; i++)
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        _audio.Received(4).AdjustLevel(step);
+    }
+
+    [Fact]
+    public void Rotation_RaisesVolumeModeEvent()
+    {
+        var modes = new List<InteractionMode>();
+        _controller.InteractionModeChanged += modes.Add;
 
         _hid.Rotated += Raise.Event<Action<int>>(1);
 
-        float expectedStep = (5 / 100f) * 2.0f;
-        _audio.Received().AdjustLevel(expectedStep);
-    }
-
-    // ── Single click ──────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task SingleClick_PlayPause_IsDefault()
-    {
-        // Press and release quickly (short press)
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        // Wait for tap timer to fire
-        await Task.Delay(500);
-
-        // Can't directly assert MediaKeyService.PlayPause() was called (static),
-        // but we can verify Mute was NOT called
-        _audio.DidNotReceive().ToggleMute();
+        Assert.Contains(InteractionMode.Volume, modes);
     }
 
     [Fact]
-    public async Task SingleClick_Mute_TogglesMute()
+    public void Rotation_InSameMode_DoesNotFireModeEventAgain()
     {
-        _config.ClickAction = ClickAction.Mute;
-        _controller.UpdateConfig(_config);
+        var modes = new List<InteractionMode>();
+        _controller.InteractionModeChanged += modes.Add;
 
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
 
-        await Task.Delay(500);
+        // Volume mode was entered once; subsequent rotations do not re-fire it.
+        Assert.Equal(1, modes.Count(m => m == InteractionMode.Volume));
+    }
 
-        _audio.Received(1).ToggleMute();
+    // ── Rotation suppressed during tap window ─────────────────────────────────
+
+    [Fact]
+    public async Task Rotation_DuringTapWindow_IsIgnored()
+    {
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        _hid.ButtonReleased += Raise.Event<Action>(); // tap count now 1
+
+        await Task.Delay(30); // still inside tap window
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        _audio.DidNotReceive().AdjustLevel(Arg.Any<float>());
     }
 
     [Fact]
-    public async Task SingleClick_None_DoesNothing()
+    public async Task Rotation_AfterTapWindowExpired_WorksNormally()
     {
-        _config.ClickAction = ClickAction.None;
-        _controller.UpdateConfig(_config);
-
-        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.ButtonPressed  += Raise.Event<Action>();
         _hid.ButtonReleased += Raise.Event<Action>();
 
-        await Task.Delay(500);
+        await Task.Delay(TapWindow + 100); // tap window has expired
 
-        _audio.DidNotReceive().ToggleMute();
+        _audio.ClearReceivedCalls();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        _audio.Received(1).AdjustLevel(Arg.Any<float>());
     }
 
-    // ── Double click ──────────────────────────────────────────────────────────
+    // ── Idle timeout → mode returns to Idle ──────────────────────────────────
 
     [Fact]
-    public async Task DoubleClick_Mute_TogglesMute()
+    public async Task IdleTimeout_AfterRotation_ResetsInteractionMode()
     {
-        _config.DoubleClickAction = DoubleClickAction.Mute;
-        _controller.UpdateConfig(_config);
+        var modes = new List<InteractionMode>();
+        _controller.InteractionModeChanged += modes.Add;
 
-        // Two quick presses
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-        await Task.Delay(50);
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1); // → Volume
 
-        await Task.Delay(500);
+        await Task.Delay(_controller.IdleTimeoutMs + 100);
 
-        _audio.Received(1).ToggleMute();
-    }
-
-    // ── Triple click ──────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task TripleClick_Mute_TogglesMute()
-    {
-        _config.TripleClickAction = TripleClickAction.Mute;
-        _controller.UpdateConfig(_config);
-
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-        await Task.Delay(50);
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-        await Task.Delay(50);
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        await Task.Delay(500);
-
-        _audio.Received(1).ToggleMute();
-    }
-
-    // ── Long press ────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task LongPress_Mute_TogglesMute()
-    {
-        _config.LongPressMs = 300;
-        _controller.UpdateConfig(_config);
-
-        _hid.ButtonPressed += Raise.Event<Action>();
-        await Task.Delay(400); // Longer than LongPressMs
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        _audio.Received(1).ToggleMute();
+        Assert.Contains(InteractionMode.Idle, modes);
     }
 
     [Fact]
-    public async Task LongPress_None_DoesNotMute()
+    public async Task IdleTimeout_WhenPulseOff_RestoresLedToVolume()
     {
-        _config.LongPressAction = LongPressAction.None;
-        _config.LongPressMs = 300;
-        _controller.UpdateConfig(_config);
-
-        _hid.ButtonPressed += Raise.Event<Action>();
-        await Task.Delay(400);
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        _audio.DidNotReceive().ToggleMute();
-    }
-
-    [Fact]
-    public async Task LongPress_CancelsPendingMultiTap()
-    {
-        // When a second press is held long, the pending tap count from
-        // the first press should be cancelled (long press resets _tapCount).
-        // Use double-click action so we can distinguish from single-click.
-        _config.ClickAction = ClickAction.None;
-        _config.DoubleClickAction = DoubleClickAction.Mute;
-        _config.LongPressMs = 300;
-        _controller.UpdateConfig(_config);
-
-        // First short press — starts tap count at 1
-        _hid.ButtonPressed += Raise.Event<Action>();
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        // Second press immediately — tap count becomes 2, but hold it long
-        _hid.ButtonPressed += Raise.Event<Action>();
-        await Task.Delay(400); // Hold past LongPressMs
-        _hid.ButtonReleased += Raise.Event<Action>();
-
-        await Task.Delay(500); // Wait for any pending timers
-
-        // The double-click (Mute) should NOT fire because long press cancelled it.
-        // Only the long-press mute fires.
-        _audio.Received(1).ToggleMute();
-    }
-
-    // ── Connection ────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void ConnectionChanged_Forwarded()
-    {
-        bool? connected = null;
-        _controller.ConnectionChanged += c => connected = c;
-
-        _hid.ConnectionChanged += Raise.Event<Action<bool>>(true);
-
-        Assert.True(connected);
-    }
-
-    // ── UpdateConfig ──────────────────────────────────────────────────────────
-
-    [Fact]
-    public void UpdateConfig_WhenPulseOff_SetsLedToVolumeLevel()
-    {
-        _audio.GetLevel().Returns(0.6f);
         _config.LedPulseOnAudio = false;
-
         _controller.UpdateConfig(_config);
+        _audio.GetLevel().Returns(0.8f);
+
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        _hid.ClearReceivedCalls();
+        await Task.Delay(_controller.IdleTimeoutMs + 100);
+
+        _hid.Received().SetLed((byte)(0.8f * 255));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // System volume changed (from outside)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SystemVolumeChange_FiresVolumeChangedEvent()
+    {
+        float level = -1; bool muted = true;
+        _controller.VolumeChanged += (l, m) => { level = l; muted = m; };
+
+        _audio.VolumeChanged += Raise.Event<Action<float, bool>>(0.9f, false);
+
+        Assert.Equal(0.9f, level);
+        Assert.False(muted);
+    }
+
+    [Fact]
+    public void SystemVolumeChange_UpdatesLed_WhenPulseOff()
+    {
+        _config.LedPulseOnAudio = false;
+        _controller.UpdateConfig(_config);
+        _hid.ClearReceivedCalls();
+
+        _audio.VolumeChanged += Raise.Event<Action<float, bool>>(0.6f, false);
 
         _hid.Received().SetLed((byte)(0.6f * 255));
     }
 
     [Fact]
-    public void UpdateConfig_WhenPulseOn_DoesNotSetStaticLed()
+    public void SystemVolumeChange_DoesNotUpdateLed_WhenPulseOn()
     {
         _config.LedPulseOnAudio = true;
-        _hid.IsConnected.Returns(true);
-
+        _controller.UpdateConfig(_config);
         _hid.ClearReceivedCalls();
+
+        _audio.VolumeChanged += Raise.Event<Action<float, bool>>(0.6f, false);
+
+        // LED is managed by the pulse timer, not by this event.
+        _hid.DidNotReceive().SetLed(Arg.Any<byte>());
+    }
+
+    [Fact]
+    public void SystemVolumeChange_Suppressed_WhileSelfChanging()
+    {
+        // When _selfChanging is true (our own AdjustLevel triggered the notification),
+        // the controller must not re-fire VolumeChanged (feedback-loop guard).
+        int callCount = 0;
+        _controller.VolumeChanged += (_, _) => callCount++;
+
+        // Configure mock so that AdjustLevel synchronously fires the audio event
+        // (simulating the OS callback arriving while _selfChanging is true).
+        _audio.When(a => a.AdjustLevel(Arg.Any<float>()))
+              .Do(_ => _audio.VolumeChanged += Raise.Event<Action<float, bool>>(0.5f, false));
+
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        // Exactly one VolumeChanged call: from our explicit code path, not the re-entrant one.
+        Assert.Equal(1, callCount);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Button — hardcoded actions
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task SinglePress_DoesNotToggleMute()
+    {
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(TapWindow + 100);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task DoublePress_DoesNotToggleMute()
+    {
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(30);
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(TapWindow + 100);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task TriplePress_DoesNotToggleMute()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            _hid.ButtonPressed  += Raise.Event<Action>();
+            _hid.ButtonReleased += Raise.Event<Action>();
+            if (i < 2) await Task.Delay(30);
+        }
+        await Task.Delay(TapWindow + 100);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task LongPress_TogglesMute_BeforeRelease()
+    {
+        // Mute fires immediately when the threshold is crossed, not on release.
+        _hid.ButtonPressed += Raise.Event<Action>();
+        await Task.Delay(LongPress + 100);
+        _audio.Received(1).ToggleMute(); // already fired, button still held
+        _hid.ButtonReleased += Raise.Event<Action>();
+        _audio.Received(1).ToggleMute(); // still exactly once after release
+    }
+
+    [Fact]
+    public async Task ShortPress_JustUnderLongPressThreshold_DoesNotMute()
+    {
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        await Task.Delay(LongPress / 2);  // well under — timer not yet fired
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(TapWindow + 100);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task LongPress_CancelsPendingTap()
+    {
+        _hid.ButtonPressed  += Raise.Event<Action>(); // tap 1
+        _hid.ButtonReleased += Raise.Event<Action>();
+
+        _hid.ButtonPressed  += Raise.Event<Action>(); // held long → fires mute immediately
+        await Task.Delay(LongPress + 100);
+        _hid.ButtonReleased += Raise.Event<Action>();
+
+        await Task.Delay(TapWindow + 100);
+        _audio.Received(1).ToggleMute(); // exactly once, tap from press 1 was cancelled
+    }
+
+    [Fact]
+    public void ButtonPress_RaisesButtonModeEvent()
+    {
+        InteractionMode? mode = null;
+        _controller.InteractionModeChanged += m => mode = m;
+        _hid.ButtonPressed += Raise.Event<Action>();
+        Assert.Equal(InteractionMode.Button, mode);
+    }
+
+    [Fact]
+    public async Task TapThenLongPress_OnlyMutes_NotDoubleAction()
+    {
+        // Single tap followed by a long press within the tap window.
+        // The stale tap timer must not fire while the button is held; only mute should execute.
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        _hid.ButtonReleased += Raise.Event<Action>(); // tap 1 pending
+
+        // Re-press immediately (within tap window) and hold for long press.
+        _hid.ButtonPressed  += Raise.Event<Action>();
+        await Task.Delay(LongPress + 100); // long press timer fires → mute
+        _hid.ButtonReleased += Raise.Event<Action>();
+
+        await Task.Delay(TapWindow + 100); // wait out any stale timers
+
+        // Mute executed exactly once. (PlayPause goes via SendInput and can't be intercepted
+        // in unit tests, but the tap timer guard ensures it is not called.)
+        _audio.Received(1).ToggleMute();
+    }
+
+    [Fact]
+    public void ButtonRelease_WithoutPriorPress_IsIgnored()
+    {
+        // Should not throw or fire any events.
+        var ex = Record.Exception(() => _hid.ButtonReleased += Raise.Event<Action>());
+        Assert.Null(ex);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // FF/RW — button held + rotation
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task FfRw_BelowThreshold_DoesNotSeek()
+    {
+        _config.FfRwThreshold = 3;
         _controller.UpdateConfig(_config);
 
-        // The timer will call SetLed, but UpdateConfig itself should not set a static value
-        // (any SetLed calls come from the pulse timer, not from a static brightness set)
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1); // 2 < threshold
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(50);
+
+        await _media.DidNotReceive().SeekRelativeAsync(Arg.Any<TimeSpan>());
+    }
+
+    [Fact]
+    public async Task FfRw_AtThreshold_Seeks()
+    {
+        _config.FfRwThreshold   = 3;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        for (int i = 0; i < 3; i++)
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task FfRw_CcwRotation_SeeksNegative()
+    {
+        _config.FfRwThreshold   = 2;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(-1);
+        _hid.Rotated += Raise.Event<Action<int>>(-1);
+        await Task.Delay(50);
+
+        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(-5));
+    }
+
+    [Fact]
+    public async Task FfRw_AdditionalSteps_EachTriggerSeek()
+    {
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        for (int i = 0; i < 5; i++)
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        await _media.Received(5).SeekRelativeAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task FfRw_MixedDirections_BothCountTowardThreshold()
+    {
+        // CW then CCW — total absolute steps = 2 which meets threshold = 2.
+        _config.FfRwThreshold   = 2;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);  // step 1
+        _hid.Rotated += Raise.Event<Action<int>>(-1); // step 2 — enters FfRw
+        await Task.Delay(50);
+
+        // The second step triggered FfRw; seek was called at least once.
+        await _media.Received().SeekRelativeAsync(Arg.Any<TimeSpan>());
+    }
+
+    [Fact]
+    public async Task FfRw_InvertedRotation_SeeksInOppositeDirection()
+    {
+        _config.FfRwThreshold   = 2;
+        _config.FfRwStepSeconds = 5;
+        _config.InvertRotation  = true;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(-5));
+    }
+
+    [Fact]
+    public async Task FfRw_RaisesInteractionModeFfRwEvent()
+    {
+        _config.FfRwThreshold = 2;
+        _controller.UpdateConfig(_config);
+
+        var modes = new List<InteractionMode>();
+        _controller.InteractionModeChanged += modes.Add;
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        Assert.Contains(InteractionMode.FfRw, modes);
+    }
+
+    [Fact]
+    public async Task FfRw_Release_DoesNotFireTapAction()
+    {
+        _config.FfRwThreshold = 2;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.ButtonReleased += Raise.Event<Action>();
+        await Task.Delay(TapWindow + 100);
+
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task FfRw_AfterRelease_VolumeRotationResumesNormally()
+    {
+        _config.FfRwThreshold = 2;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.ButtonReleased += Raise.Event<Action>();
+
+        _audio.ClearReceivedCalls();
+        _hid.Rotated += Raise.Event<Action<int>>(1); // normal rotation, button not held
+
+        _audio.Received(1).AdjustLevel(Arg.Any<float>());
+    }
+
+    [Fact]
+    public void FfRw_RotationWhileHeld_DoesNotAdjustVolume()
+    {
+        // Any rotation while button is held must NOT touch volume.
+        _config.FfRwThreshold = 10; // high threshold → stays below FfRw
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        for (int i = 0; i < 5; i++)
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        _audio.DidNotReceive().AdjustLevel(Arg.Any<float>());
+    }
+
+    [Fact]
+    public async Task FfRw_ThresholdOne_SingleStepSeeks()
+    {
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 3;
+        _controller.UpdateConfig(_config);
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        await _media.Received(1).SeekRelativeAsync(TimeSpan.FromSeconds(3));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Connection
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void IsConnected_ReflectsHidService()
+    {
+        _hid.IsConnected.Returns(true);
+        Assert.True(_controller.IsConnected);
+
+        _hid.IsConnected.Returns(false);
+        Assert.False(_controller.IsConnected);
+    }
+
+    [Fact]
+    public void ConnectionChanged_True_IsForwarded()
+    {
+        bool? connected = null;
+        _controller.ConnectionChanged += c => connected = c;
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(true);
+        Assert.True(connected);
+    }
+
+    [Fact]
+    public void ConnectionChanged_False_IsForwarded()
+    {
+        bool? connected = null;
+        _controller.ConnectionChanged += c => connected = c;
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(false);
+        Assert.False(connected);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // UpdateConfig
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void UpdateConfig_PulseOff_SetsLedToCurrentVolume()
+    {
+        _audio.GetLevel().Returns(0.6f);
+        _config.LedPulseOnAudio = false;
+        _controller.UpdateConfig(_config);
+        _hid.Received().SetLed((byte)(0.6f * 255));
     }
 
     [Fact]
     public void UpdateConfig_BassOnly_StartsBassCapture()
     {
-        _config.LedPulseOnAudio = true;
-        _config.LedBassOnly = true;
+        _config.LedPulseOnAudio     = true;
+        _config.LedBassOnly         = true;
         _config.BassFrequencyCutoff = 200;
-        _config.BassGain = 8.0f;
-
+        _config.BassGain            = 8.0f;
         _controller.UpdateConfig(_config);
-
         _audio.Received(1).StartBassCapture(200, 8.0f);
     }
 
     [Fact]
-    public void UpdateConfig_PulseOff_StopsBassCapture()
+    public void UpdateConfig_PulseOff_StopsCapture()
     {
         _config.LedPulseOnAudio = false;
-
         _controller.UpdateConfig(_config);
+        _audio.Received().StopCapture();
+    }
 
-        _audio.Received().StopBassCapture();
+    [Fact]
+    public void UpdateConfig_PulseOn_NotBassOnly_StartsPeakCapture()
+    {
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _controller.UpdateConfig(_config);
+        _audio.Received().StartPeakCapture();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Dispose / lifecycle
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Dispose_DoesNotThrow()
+    {
+        var ex = Record.Exception(() => _controller.Dispose());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Dispose_DisposesHid()
+    {
+        _controller.Dispose();
+        _hid.Received(1).Dispose();
+    }
+
+    [Fact]
+    public void Dispose_DisposesAudio()
+    {
+        _controller.Dispose();
+        _audio.Received(1).Dispose();
+    }
+
+    [Fact]
+    public void Dispose_DisposesMedia()
+    {
+        _controller.Dispose();
+        _media.Received(1).Dispose();
     }
 }
