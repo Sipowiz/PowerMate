@@ -507,6 +507,27 @@ public class PowerMateControllerTests : IDisposable
     {
         _config.FfRwThreshold = 2;
         _controller.UpdateConfig(_config);
+        _controller.FfRwReleaseGuardMs = 0;
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        _hid.ButtonReleased += Raise.Event<Action>();
+
+        await Task.Delay(50); // let the release guard timer expire
+
+        _audio.ClearReceivedCalls();
+        _hid.Rotated += Raise.Event<Action<int>>(1); // normal rotation, button not held
+
+        _audio.Received(1).AdjustLevel(Arg.Any<float>());
+    }
+
+    [Fact]
+    public void FfRw_ReleaseGuard_BlocksVolumeImmediatelyAfterRelease()
+    {
+        _config.FfRwThreshold = 2;
+        _controller.UpdateConfig(_config);
+        // Leave FfRwReleaseGuardMs at default (500) — guard should be active
 
         _hid.ButtonPressed += Raise.Event<Action>();
         _hid.Rotated += Raise.Event<Action<int>>(1);
@@ -514,9 +535,9 @@ public class PowerMateControllerTests : IDisposable
         _hid.ButtonReleased += Raise.Event<Action>();
 
         _audio.ClearReceivedCalls();
-        _hid.Rotated += Raise.Event<Action<int>>(1); // normal rotation, button not held
+        _hid.Rotated += Raise.Event<Action<int>>(1); // during guard window
 
-        _audio.Received(1).AdjustLevel(Arg.Any<float>());
+        _audio.DidNotReceive().AdjustLevel(Arg.Any<float>());
     }
 
     [Fact]
