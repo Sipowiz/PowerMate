@@ -7,7 +7,7 @@
 
 #define MyAppName      "PowerMate Driver"
 #ifndef MyAppVersion
-  #define MyAppVersion   "1.3.0"
+  #define MyAppVersion   "1.4.0"
 #endif
 #define MyAppPublisher "PowerMate"
 #define MyAppExeName   "PowerMate.exe"
@@ -45,12 +45,14 @@ Name: "startupentry"; Description: "Start with &Windows"; GroupDescription: "Sta
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupentry
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"; Tasks: desktopicon
+Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"; Tasks: startupentry
 
 [Run]
+; Flush the shell icon cache so the new icon appears immediately in taskbar and Start menu
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]

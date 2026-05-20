@@ -3,10 +3,10 @@ using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.Win32;
 using PowerMate;
 using PowerMate.Services;
 using PowerMate.Views;
-using System.Runtime.InteropServices;
 using System.Windows.Input;
 using WinMenuFlyout          = Microsoft.UI.Xaml.Controls.MenuFlyout;
 using WinMenuFlyoutItem      = Microsoft.UI.Xaml.Controls.MenuFlyoutItem;
@@ -23,6 +23,8 @@ public partial class App : MauiWinUIApplication
     private MauiWindow? _creditsWindow;
     private DispatcherQueue _dq = null!;
 
+    private PowerMateController? _controller;
+
     // Cached state for icon rendering
     private float           _currentVolume;
     private bool            _isMuted;
@@ -32,11 +34,9 @@ public partial class App : MauiWinUIApplication
     private Timer?          _flashTimer;
     private IMediaSessionService? _mediaService;
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-    private const int WM_SETICON = 0x0080;
-    private const int ICON_SMALL = 0;
-    private const int ICON_BIG   = 1;
+    // AppWindow.SetIcon caches by path, so we rotate filenames to force a reload.
+    private string _tempIconPath = "";
+    private int    _tempIconGen;
 
     public App()
     {
@@ -52,6 +52,7 @@ public partial class App : MauiWinUIApplication
 
         SetupTrayIcon();
         StartController();
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         _dq.TryEnqueue(DispatcherQueuePriority.Low, HideMainWindow);
     }
@@ -112,24 +113,24 @@ public partial class App : MauiWinUIApplication
         var services = MauiProgram.Current?.Services;
         if (services == null) return;
 
-        var controller = services.GetRequiredService<PowerMateController>();
-        _mediaService  = services.GetRequiredService<IMediaSessionService>();
+        _controller   = services.GetRequiredService<PowerMateController>();
+        _mediaService = services.GetRequiredService<IMediaSessionService>();
 
-        controller.Start();
+        _controller.Start();
 
         var audio = services.GetRequiredService<IAudioService>();
         _currentVolume = audio.GetLevel();
         _isMuted       = audio.IsMuted();
         RefreshTrayIcon();
 
-        controller.VolumeChanged += (vol, muted) =>
+        _controller.VolumeChanged += (vol, muted) =>
         {
             _currentVolume = vol;
             _isMuted       = muted;
             _dq.TryEnqueue(RefreshTrayIcon);
         };
 
-        controller.ConnectionChanged += connected =>
+        _controller.ConnectionChanged += connected =>
             _dq.TryEnqueue(() =>
             {
                 if (_trayIcon != null)
@@ -138,7 +139,7 @@ public partial class App : MauiWinUIApplication
                         : "PowerMate — Disconnected";
             });
 
-        controller.InteractionModeChanged += mode =>
+        _controller.InteractionModeChanged += mode =>
         {
             _interactionMode = mode;
             _dq.TryEnqueue(RefreshTrayIcon);
@@ -151,7 +152,7 @@ public partial class App : MauiWinUIApplication
             _dq.TryEnqueue(RefreshTrayIcon);
         };
 
-        controller.SymbolFlash += symbol =>
+        _controller.SymbolFlash += symbol =>
         {
             _playbackState = symbol;
             _dq.TryEnqueue(RefreshTrayIcon);
@@ -163,6 +164,16 @@ public partial class App : MauiWinUIApplication
                 _dq.TryEnqueue(RefreshTrayIcon);
             }, null, 600, Timeout.Infinite);
         };
+    }
+
+    // ── Power management ──────────────────────────────────────────────────────
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Suspend)
+            _controller?.Suspend();
+        else if (e.Mode == PowerModes.Resume)
+            _controller?.Resume();
     }
 
     private void RefreshTrayIcon()
@@ -183,7 +194,7 @@ public partial class App : MauiWinUIApplication
             ? "PowerMate — Muted"
             : $"PowerMate — {(int)(_currentVolume * 100)}%";
 
-        UpdateWindowIcon(displayValue, _isMuted, _playbackState, isInteracting);
+        UpdateWindowIcon(icon);
     }
 
     // ── Settings / Credits windows ────────────────────────────────────────────
@@ -276,10 +287,6 @@ public partial class App : MauiWinUIApplication
 
     // ── Taskbar / window icon ─────────────────────────────────────────────────
 
-    /// <summary>
-    /// Subscribes to the window's Activated event to set the icon after WinUI
-    /// has finished applying its own default — more reliable than priority-queue tricks.
-    /// </summary>
     private void HookWindowIconOnActivated(Microsoft.UI.Xaml.Window w)
     {
         Windows.Foundation.TypedEventHandler<object, WindowActivatedEventArgs>? handler = null;
@@ -293,47 +300,48 @@ public partial class App : MauiWinUIApplication
 
     private void SetWindowIcon(Microsoft.UI.Xaml.Window win)
     {
-        try
-        {
-            bool isFfRw        = _interactionMode == InteractionMode.FfRw;
-            bool isInteracting = _interactionMode != InteractionMode.Idle;
-            float displayValue = isFfRw
-                ? (_mediaService?.GetPlaybackPosition() ?? 0f)
-                : _currentVolume;
-
-            var icon  = TrayIconRenderer.Render(displayValue, _isMuted, _playbackState, isInteracting);
-            var hIcon = icon.Handle;
-            var hWnd  = WinRT.Interop.WindowNative.GetWindowHandle(win);
-            SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_SMALL, hIcon);
-            SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_BIG,   hIcon);
-        }
+        if (_tempIconPath.Length == 0) return;
+        try { win.AppWindow.SetIcon(_tempIconPath); }
         catch { }
     }
 
-    private void UpdateWindowIcon(float displayValue, bool muted,
-        PlaybackState playbackState, bool interacting)
+    private void UpdateWindowIcon(System.Drawing.Icon icon)
     {
+        // Use a new filename each call — AppWindow.SetIcon caches by path in Release builds.
+        var newPath = Path.Combine(Path.GetTempPath(), $"PowerMate_icon_{++_tempIconGen}.ico");
+        var oldPath = _tempIconPath;
+
         try
         {
-            if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
-            {
-                var icon  = TrayIconRenderer.Render(displayValue, muted, playbackState, interacting);
-                var hIcon = icon.Handle;
-                var hWnd  = WinRT.Interop.WindowNative.GetWindowHandle(win);
-                SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_SMALL, hIcon);
-                SendMessage(hWnd, WM_SETICON, (IntPtr)ICON_BIG,   hIcon);
-            }
+            using var fs = new FileStream(newPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            icon.Save(fs);
+        }
+        catch { return; }
+
+        _tempIconPath = newPath;
+
+        try
+        {
+            if (_settingsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window sw)
+                sw.AppWindow.SetIcon(newPath);
+            if (_creditsWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window cw)
+                cw.AppWindow.SetIcon(newPath);
         }
         catch { }
+
+        // Delete previous file now that AppWindow has loaded the new one.
+        if (oldPath.Length > 0) try { File.Delete(oldPath); } catch { }
     }
 
     // ── Quit ──────────────────────────────────────────────────────────────────
 
     private void QuitApp()
     {
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _flashTimer?.Dispose();
         _trayIcon?.Dispose();
-        MauiProgram.Current?.Services.GetService<PowerMateController>()?.Dispose();
+        _controller?.Dispose();
+        if (_tempIconPath.Length > 0) try { File.Delete(_tempIconPath); } catch { }
         Microsoft.UI.Xaml.Application.Current.Exit();
     }
 

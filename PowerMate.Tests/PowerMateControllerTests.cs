@@ -621,6 +621,187 @@ public class PowerMateControllerTests : IDisposable
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // Audio-pulse LED: playback-state fallback
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Theory]
+    [InlineData(PlaybackState.Paused)]
+    [InlineData(PlaybackState.Stopped)]
+    [InlineData(PlaybackState.Unknown)]
+    public async Task AudioPulse_WhenNotPlaying_ShowsVolumeLed(PlaybackState state)
+    {
+        _hid.IsConnected.Returns(true);
+        _audio.GetLevel().Returns(0.3f);
+        _audio.GetPeakLevel().Returns(0.9f); // different value — must NOT appear
+        _media.GetPlaybackState().Returns(state);
+
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _controller.UpdateConfig(_config);
+
+        await Task.Delay(100);
+
+        _hid.Received().SetLed((byte)(0.3f * 255));
+        _hid.DidNotReceive().SetLed((byte)(0.9f * 255));
+    }
+
+    [Fact]
+    public async Task AudioPulse_WhenPlaying_ShowsPeakLed()
+    {
+        _hid.IsConnected.Returns(true);
+        _audio.GetLevel().Returns(0.3f);     // different value — must NOT appear
+        _audio.GetPeakLevel().Returns(0.9f);
+        _media.GetPlaybackState().Returns(PlaybackState.Playing);
+
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _controller.UpdateConfig(_config);
+
+        await Task.Delay(100);
+
+        _hid.Received().SetLed((byte)(0.9f * 255));
+        _hid.DidNotReceive().SetLed((byte)(0.3f * 255));
+    }
+
+    [Fact]
+    public async Task AudioPulse_WhenBassOnly_WhenPlaying_ShowsBassPeakLed()
+    {
+        _hid.IsConnected.Returns(true);
+        _audio.GetLevel().Returns(0.3f);
+        _audio.GetBassPeak().Returns(0.8f);
+        _media.GetPlaybackState().Returns(PlaybackState.Playing);
+
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = true;
+        _controller.UpdateConfig(_config);
+
+        await Task.Delay(100);
+
+        _hid.Received().SetLed((byte)(0.8f * 255));
+        _hid.DidNotReceive().SetLed((byte)(0.3f * 255));
+    }
+
+    [Fact]
+    public async Task AudioPulse_WhenBassOnly_WhenPaused_ShowsVolumeLed()
+    {
+        _hid.IsConnected.Returns(true);
+        _audio.GetLevel().Returns(0.3f);
+        _audio.GetBassPeak().Returns(0.8f);  // must NOT appear
+        _media.GetPlaybackState().Returns(PlaybackState.Paused);
+
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = true;
+        _controller.UpdateConfig(_config);
+
+        await Task.Delay(100);
+
+        _hid.Received().SetLed((byte)(0.3f * 255));
+        _hid.DidNotReceive().SetLed((byte)(0.8f * 255));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Suspend / Resume (power management)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Suspend_StopsAudioCapture()
+    {
+        _controller.Suspend();
+        _audio.Received(1).StopCapture();
+    }
+
+    [Fact]
+    public void Suspend_WhenPulseOn_StopsCapture()
+    {
+        _config.LedPulseOnAudio = true;
+        _controller.UpdateConfig(_config);
+        _audio.ClearReceivedCalls();
+
+        _controller.Suspend();
+
+        _audio.Received(1).StopCapture();
+    }
+
+    [Fact]
+    public async Task Resume_WhenPulseOn_RestartsCapture()
+    {
+        _config.LedPulseOnAudio = true;
+        _controller.UpdateConfig(_config);
+        _controller.ResumeCaptureDelayMs = 0;
+        _audio.ClearReceivedCalls();
+
+        _controller.Resume();
+        await Task.Delay(100);
+
+        _audio.Received().StartPeakCapture();
+    }
+
+    [Fact]
+    public async Task Resume_WhenBassOnly_RestartsBassCapture()
+    {
+        _config.LedPulseOnAudio     = true;
+        _config.LedBassOnly         = true;
+        _config.BassFrequencyCutoff = 200;
+        _config.BassGain            = 6.0f;
+        _controller.UpdateConfig(_config);
+        _controller.ResumeCaptureDelayMs = 0;
+        _audio.ClearReceivedCalls();
+
+        _controller.Resume();
+        await Task.Delay(100);
+
+        _audio.Received().StartBassCapture(200, 6.0f);
+    }
+
+    [Fact]
+    public async Task Resume_WhenPulseOff_DoesNotRestartCapture()
+    {
+        _config.LedPulseOnAudio = false;
+        _controller.UpdateConfig(_config);
+        _controller.ResumeCaptureDelayMs = 0;
+        _audio.ClearReceivedCalls();
+
+        _controller.Resume();
+        await Task.Delay(100);
+
+        _audio.DidNotReceive().StartPeakCapture();
+        _audio.DidNotReceive().StartBassCapture(Arg.Any<int>(), Arg.Any<float>());
+    }
+
+    [Fact]
+    public async Task SuspendThenResume_WithPulseOn_RestartsCapture()
+    {
+        _config.LedPulseOnAudio = true;
+        _controller.UpdateConfig(_config);
+        _controller.ResumeCaptureDelayMs = 0;
+
+        _controller.Suspend();
+        _audio.ClearReceivedCalls();
+
+        _controller.Resume();
+        await Task.Delay(100);
+
+        _audio.Received().StartPeakCapture();
+    }
+
+    [Fact]
+    public async Task SuspendThenResume_WithPulseOff_DoesNotRestartCapture()
+    {
+        _config.LedPulseOnAudio = false;
+        _controller.UpdateConfig(_config);
+        _controller.ResumeCaptureDelayMs = 0;
+
+        _controller.Suspend();
+        _audio.ClearReceivedCalls();
+
+        _controller.Resume();
+        await Task.Delay(100);
+
+        _audio.DidNotReceive().StartPeakCapture();
+        _audio.DidNotReceive().StartBassCapture(Arg.Any<int>(), Arg.Any<float>());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // Dispose / lifecycle
     // ══════════════════════════════════════════════════════════════════════════
 

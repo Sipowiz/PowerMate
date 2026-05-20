@@ -28,7 +28,8 @@ public class PowerMateController : IDisposable
     private Timer? _idleTimer;
     private Timer? _ffRwLedTimer;
     // Overridable by tests via InternalsVisibleTo.
-    internal int IdleTimeoutMs = 2000;
+    internal int IdleTimeoutMs        = 2000;
+    internal int ResumeCaptureDelayMs = 2000;
 
     // ── Audio-peak LED pulse (idle) ───────────────────────────────────────────
     private Timer? _audioPulseTimer;
@@ -306,10 +307,32 @@ public class PowerMateController : IDisposable
             || _volumeOverrideActive
             || _interactionMode != InteractionMode.Idle) return;
 
+        // Fall back to static volume indicator when nothing is playing
+        if (_media.GetPlaybackState() != PlaybackState.Playing)
+        {
+            _hid.SetLed((byte)(_audio.GetLevel() * 255));
+            return;
+        }
+
         float peak = _config.LedBassOnly
             ? _audio.GetBassPeak()
             : _audio.GetPeakLevel();
         _hid.SetLed((byte)(peak * 255));
+    }
+
+    // ── Power management ──────────────────────────────────────────────────────
+
+    public void Suspend()
+    {
+        _audioPulseTimer?.Dispose();
+        _audioPulseTimer = null;
+        _audio.StopCapture();
+    }
+
+    public void Resume()
+    {
+        // Delay audio restart to allow WASAPI to reinitialize after sleep/hibernate
+        _ = Task.Delay(ResumeCaptureDelayMs).ContinueWith(_ => ApplyAudioPulse());
     }
 
     public void Dispose()
