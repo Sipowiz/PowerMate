@@ -1,3 +1,5 @@
+using Serilog;
+
 namespace PowerMate.Tests;
 
 public class MauiProgramTests : IDisposable
@@ -8,10 +10,12 @@ public class MauiProgramTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), $"powermate_crash_test_{Guid.NewGuid():N}");
         MauiProgram.TestCrashLogPath = Path.Combine(_tempDir, "crash.log");
+        MauiProgram.ConfigureLogging();
     }
 
     public void Dispose()
     {
+        Log.CloseAndFlush();
         MauiProgram.TestCrashLogPath = null;
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, true);
@@ -25,6 +29,7 @@ public class MauiProgramTests : IDisposable
     public void WriteCrashLog_CreatesFileAndDirectory()
     {
         MauiProgram.WriteCrashLog(new Exception("test"), "Test");
+        Log.CloseAndFlush();
         Assert.True(File.Exists(LogPath));
     }
 
@@ -34,6 +39,7 @@ public class MauiProgramTests : IDisposable
     public void WriteCrashLog_ContainsExceptionMessage()
     {
         MauiProgram.WriteCrashLog(new Exception("boom!"), "Test");
+        Log.CloseAndFlush();
         Assert.Contains("boom!", File.ReadAllText(LogPath));
     }
 
@@ -41,6 +47,7 @@ public class MauiProgramTests : IDisposable
     public void WriteCrashLog_ContainsSource()
     {
         MauiProgram.WriteCrashLog(new Exception("x"), "MySource");
+        Log.CloseAndFlush();
         Assert.Contains("MySource", File.ReadAllText(LogPath));
     }
 
@@ -48,7 +55,7 @@ public class MauiProgramTests : IDisposable
     public void WriteCrashLog_ContainsTimestamp()
     {
         MauiProgram.WriteCrashLog(new Exception("x"), "Test");
-        // Timestamp format is yyyy-MM-dd; check the year at minimum.
+        Log.CloseAndFlush();
         Assert.Contains(DateTime.Now.Year.ToString(), File.ReadAllText(LogPath));
     }
 
@@ -59,6 +66,7 @@ public class MauiProgramTests : IDisposable
     {
         MauiProgram.WriteCrashLog(new Exception("first"), "A");
         MauiProgram.WriteCrashLog(new Exception("second"), "B");
+        Log.CloseAndFlush();
         var content = File.ReadAllText(LogPath);
         Assert.Contains("first", content);
         Assert.Contains("second", content);
@@ -77,6 +85,7 @@ public class MauiProgramTests : IDisposable
     public void WriteCrashLog_NullException_StillWritesSourceAndTimestamp()
     {
         MauiProgram.WriteCrashLog(null, "NullSource");
+        Log.CloseAndFlush();
         var content = File.ReadAllText(LogPath);
         Assert.Contains("NullSource", content);
         Assert.Contains(DateTime.Now.Year.ToString(), content);

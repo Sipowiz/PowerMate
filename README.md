@@ -1,7 +1,7 @@
 # PowerMate Driver for Windows
 
 <p align="center">
-  <img src="PowerMate.jpg" alt="Griffin PowerMate" width="180" />
+  <img src="PowerMate.png" alt="Griffin PowerMate" width="180" />
 </p>
 
 A native Windows driver and settings app for the [Griffin PowerMate](https://en.wikipedia.org/wiki/Griffin_PowerMate) USB knob, built with .NET 10 and MAUI/WinUI.
@@ -119,7 +119,7 @@ PowerMate/
 dotnet test PowerMate.Tests/PowerMate.Tests.csproj
 ```
 
-66 unit tests covering rotation, multi-tap detection, long press, FF/RW, LED updates, audio-pulse fallback, power management (suspend/resume), crash logging, config persistence, and connection events. Uses xUnit and NSubstitute.
+163 unit tests covering rotation, multi-tap detection, long press, FF/RW, LED updates, audio-pulse fallback, power management (suspend/resume), crash logging, config persistence, and connection events. Uses xUnit and NSubstitute.
 
 ## CI/CD
 

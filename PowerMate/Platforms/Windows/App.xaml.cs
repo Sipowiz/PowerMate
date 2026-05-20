@@ -1,9 +1,11 @@
+using System.Runtime.InteropServices;
 using H.NotifyIcon;
+using Serilog;
 using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
-using Microsoft.Win32;
+using WinRT.Interop;
 using PowerMate;
 using PowerMate.Services;
 using PowerMate.Views;
@@ -38,9 +40,56 @@ public partial class App : MauiWinUIApplication
     private string _tempIconPath = "";
     private int    _tempIconGen;
 
+    // ── WndProc subclass for WM_POWERBROADCAST ────────────────────────────────
+    [DllImport("comctl32.dll")]
+    private static extern bool SetWindowSubclass(
+        IntPtr hWnd, SubclassProc pfnSubclass, IntPtr uIdSubclass, IntPtr dwRefData);
+    [DllImport("comctl32.dll")]
+    private static extern bool RemoveWindowSubclass(
+        IntPtr hWnd, SubclassProc pfnSubclass, IntPtr uIdSubclass);
+    [DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(
+        IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+    private delegate IntPtr SubclassProc(
+        IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+        IntPtr uIdSubclass, IntPtr dwRefData);
+
+    private const uint WM_POWERBROADCAST    = 0x0218;
+    private const int  PBT_APMSUSPEND       = 0x0004;
+    private const int  PBT_APMRESUMESUSPEND = 0x0007;
+
+    private SubclassProc? _subclassProc; // pin delegate to prevent GC
+    private IntPtr        _subclassedHwnd;
+
+    private IntPtr OnWindowMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam,
+        IntPtr uIdSubclass, IntPtr dwRefData)
+    {
+        if (msg == WM_POWERBROADCAST)
+        {
+            int p = (int)wParam;
+            if      (p == PBT_APMSUSPEND)       _controller?.Suspend();
+            else if (p == PBT_APMRESUMESUSPEND) _controller?.Resume();
+        }
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+    }
+
+    private void InstallPowerWatcher(IntPtr hwnd)
+    {
+        _subclassProc   = OnWindowMessage;
+        _subclassedHwnd = hwnd;
+        SetWindowSubclass(hwnd, _subclassProc, (IntPtr)1, IntPtr.Zero);
+    }
+
     public App()
     {
         this.InitializeComponent();
+        this.UnhandledException += (_, e) =>
+        {
+            Log.Fatal(e.Exception, "[{Source}]", "WinUIUnhandledException");
+            Log.CloseAndFlush();
+            e.Handled = true;
+        };
     }
 
     protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
@@ -52,7 +101,6 @@ public partial class App : MauiWinUIApplication
 
         SetupTrayIcon();
         StartController();
-        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         _dq.TryEnqueue(DispatcherQueuePriority.Low, HideMainWindow);
     }
@@ -62,7 +110,12 @@ public partial class App : MauiWinUIApplication
         var mauiApp    = IPlatformApplication.Current?.Application as MauiControlsApp;
         var mauiWindow = mauiApp?.Windows.FirstOrDefault();
         if (mauiWindow?.Handler?.PlatformView is Microsoft.UI.Xaml.Window win)
+        {
             win.AppWindow?.Hide();
+            var hwnd = WindowNative.GetWindowHandle(win);
+            if (hwnd != IntPtr.Zero)
+                InstallPowerWatcher(hwnd);
+        }
     }
 
     // ── Tray icon setup ───────────────────────────────────────────────────────
@@ -164,16 +217,6 @@ public partial class App : MauiWinUIApplication
                 _dq.TryEnqueue(RefreshTrayIcon);
             }, null, 600, Timeout.Infinite);
         };
-    }
-
-    // ── Power management ──────────────────────────────────────────────────────
-
-    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
-    {
-        if (e.Mode == PowerModes.Suspend)
-            _controller?.Suspend();
-        else if (e.Mode == PowerModes.Resume)
-            _controller?.Resume();
     }
 
     private void RefreshTrayIcon()
@@ -337,7 +380,12 @@ public partial class App : MauiWinUIApplication
 
     private void QuitApp()
     {
-        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        if (_subclassedHwnd != IntPtr.Zero && _subclassProc != null)
+        {
+            RemoveWindowSubclass(_subclassedHwnd, _subclassProc, (IntPtr)1);
+            _subclassedHwnd = IntPtr.Zero;
+            _subclassProc   = null;
+        }
         _flashTimer?.Dispose();
         _trayIcon?.Dispose();
         _controller?.Dispose();
