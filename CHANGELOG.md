@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.2] - 2026-05-20
+
+### Fixed
+- App killed by Windows during hibernate when default audio output is a monitor — device removal now triggers immediate capture teardown via `DefaultAudioRenderDeviceChanged`, preventing the app from holding a stale WASAPI reference through suspend
+- `RecordingStopped` now handled so NAudio device-gone exceptions are caught instead of propagating on the capture thread
+- Capture restarts automatically on the new default device after a device-change event (e.g. monitor reconnect on resume)
+
 ## [1.4.1] - 2026-05-20
 
 ### Fixed

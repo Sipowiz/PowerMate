@@ -7,7 +7,7 @@
 
 #define MyAppName      "PowerMate Driver"
 #ifndef MyAppVersion
-  #define MyAppVersion   "1.4.1"
+  #define MyAppVersion   "1.4.2"
 #endif
 #define MyAppPublisher "PowerMate"
 #define MyAppExeName   "PowerMate.exe"

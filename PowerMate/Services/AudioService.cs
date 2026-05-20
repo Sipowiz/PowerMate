@@ -24,9 +24,27 @@ public class AudioService : IAudioService
         DefaultAudioRenderDeviceChangedEventArgs e)
     {
         if (e.Role != AudioDeviceRole.Default) return;
+
+        bool wasCapturing = _capture != null;
+        bool wasBass      = _bassMode;
+
         ResetEndpoint();
         ResetMeterDevice();
-        VolumeChanged?.Invoke(GetLevel(), IsMuted());
+        StopCapture();
+
+        try { VolumeChanged?.Invoke(GetLevel(), IsMuted()); } catch { }
+
+        // Restart capture on the new default device after a short settle delay.
+        if (wasCapturing)
+            _ = Task.Delay(500).ContinueWith(_ =>
+            {
+                try
+                {
+                    if (wasBass) StartBassCapture(_bassCutoffHz, _bassGain);
+                    else         StartPeakCapture();
+                }
+                catch { }
+            });
     }
 
     private void ResetEndpoint()
@@ -148,20 +166,45 @@ public class AudioService : IAudioService
 
     private void StartCaptureInternal()
     {
-        _capture = new WasapiLoopbackCapture();
-        _sampleRate = _capture.WaveFormat.SampleRate;
-        _bassMaxBin = (int)((float)_bassCutoffHz / _sampleRate * FftLength);
+        try
+        {
+            _capture = new WasapiLoopbackCapture();
+            _sampleRate = _capture.WaveFormat.SampleRate;
+            _bassMaxBin = (int)((float)_bassCutoffHz / _sampleRate * FftLength);
 
-        _capture.DataAvailable += OnLoopbackData;
-        _capture.StartRecording();
+            _capture.DataAvailable    += OnLoopbackData;
+            _capture.RecordingStopped += OnCaptureStopped;
+            _capture.StartRecording();
+        }
+        catch
+        {
+            _capture = null;
+        }
+    }
+
+    // Fired by NAudio when the capture thread exits — either via StopRecording()
+    // or because the device became invalid (monitor off, hibernate, unplug).
+    private void OnCaptureStopped(object? sender, StoppedEventArgs e)
+    {
+        if (sender is not WasapiLoopbackCapture c) return;
+        c.DataAvailable    -= OnLoopbackData;
+        c.RecordingStopped -= OnCaptureStopped;
+        try { c.Dispose(); } catch { }
+        if (ReferenceEquals(c, _capture))
+        {
+            _capture  = null;
+            _peak     = 0;
+            _bassPeak = 0;
+        }
     }
 
     public void StopCapture()
     {
         if (_capture == null) return;
-        _capture.DataAvailable -= OnLoopbackData;
+        _capture.DataAvailable    -= OnLoopbackData;
+        _capture.RecordingStopped -= OnCaptureStopped;
         try { _capture.StopRecording(); } catch { }
-        _capture.Dispose();
+        try { _capture.Dispose(); }      catch { }
         _capture  = null;
         _bassPeak = 0;
         _peak     = 0;
