@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.4] - 2026-05-20
+
+### Fixed
+- App killed during sleep/hibernate with no crash log — managed exception escaping the native WndProc callback (`OnWindowMessage`) caused CLR FailFast (`STATUS_FATAL_APP_EXIT`, 0xC000027B), bypassing all managed exception handlers; added try/catch inside the callback so power-broadcast exceptions are caught and logged instead
+
+### Added
+- Serilog rolling daily log files at `%AppData%\PowerMate\crash-YYYYMMDD.log` (30-day retention) replacing the custom crash log writer
+- Custom `Program.cs` entry point wraps `Application.Start()` in try/catch/finally with `Log.CloseAndFlush()` in the finally block — guarantees the log is flushed however the app exits
+- WinUI `UnhandledException` handler logs and suppresses XAML-layer exceptions before they can terminate the process
+
 ## [1.4.3] - 2026-05-20
 
 ### Fixed

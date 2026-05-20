@@ -37,8 +37,6 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
-        ConfigureLogging();
-
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
             Log.Fatal(e.ExceptionObject as Exception, "[{Source}]", "UnhandledException");

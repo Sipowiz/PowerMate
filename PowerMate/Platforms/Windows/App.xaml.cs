@@ -68,8 +68,17 @@ public partial class App : MauiWinUIApplication
         if (msg == WM_POWERBROADCAST)
         {
             int p = (int)wParam;
-            if      (p == PBT_APMSUSPEND)       _controller?.Suspend();
-            else if (p == PBT_APMRESUMESUSPEND) _controller?.Resume();
+            try
+            {
+                if      (p == PBT_APMSUSPEND)       _controller?.Suspend();
+                else if (p == PBT_APMRESUMESUSPEND) _controller?.Resume();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "[{Source}] wParam={P}", "WndProcPowerBroadcast", p);
+                Log.CloseAndFlush();
+                MauiProgram.ConfigureLogging();
+            }
         }
         return DefSubclassProc(hWnd, msg, wParam, lParam);
     }

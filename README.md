@@ -21,7 +21,7 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 - **System Tray** — Dynamic tray icon shows a live blue volume arc, playback state symbol, and mute indicator
 - **SMTC Integration** — Reads media session state (play/pause/stop) and flashes a skip symbol on the tray icon for next/previous track
 - **Sleep/Hibernate** — Survives system suspend: audio capture stops cleanly before sleep and restarts automatically on resume
-- **Crash Logging** — Unhandled exceptions written to `%AppData%\PowerMate\crash.log`
+- **Crash Logging** — Unhandled exceptions written to `%AppData%\PowerMate\crash-YYYYMMDD.log` via Serilog (rolling daily, 30-day retention)
 - **Settings UI** — Dark-themed settings window with auto-save
 - **Start with Windows** — Optional startup registration
 - **Installer** — Inno Setup installer with desktop shortcut, Start menu entry, and uninstall support
@@ -101,6 +101,7 @@ PowerMate/
 │   └── CreditsPage.xaml.cs
 └── Platforms/Windows/
     ├── App.xaml.cs               # WinUI app, tray icon, power management
+    ├── Program.cs                # Custom entry point with try/catch/finally Serilog flush
     └── TrayIconRenderer.cs       # GDI+ dynamic tray icon renderer
 ```
 
@@ -111,6 +112,8 @@ PowerMate/
 | [HidSharp](https://www.zer7.com/software/hidsharp) | 2.6.4 | USB HID device communication |
 | [NAudio](https://github.com/naudio/NAudio) | 2.3.0 | Audio control, FFT, loopback capture |
 | [H.NotifyIcon.WinUI](https://github.com/HavenDV/H.NotifyIcon) | 2.4.1 | System tray icon |
+| [Serilog](https://serilog.net) | 4.3.1 | Structured crash logging |
+| Serilog.Sinks.File | 7.0.0 | Rolling daily log files |
 | System.Drawing.Common | 10.0.5 | Tray icon GDI+ rendering |
 
 ## Testing
