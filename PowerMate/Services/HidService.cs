@@ -134,28 +134,13 @@ public class HidService : IHidService
     // ── LED control ───────────────────────────────────────────────────────────
     public void SetLed(byte brightness)
     {
-        if (_devicePath == null) return;
+        if (_stream == null) return;
         try
         {
-            using var handle = CreateFile(
-                _devicePath,
-                GENERIC_WRITE,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                IntPtr.Zero,
-                OPEN_EXISTING,
-                0,
-                IntPtr.Zero);
-
-            if (handle.IsInvalid) return;
-
-            var buf = new byte[9];
-            buf[0] = 0x00;
-            buf[1] = brightness;
-
-            // Try all three; whichever succeeds on this firmware wins.
-            if (!HidD_SetFeature(handle, buf, buf.Length))
-                if (!HidD_SetOutputReport(handle, buf, buf.Length))
-                    WriteFile(handle, buf, buf.Length, out _, IntPtr.Zero);
+            var report = new byte[2];
+            report[0] = 0x00;
+            report[1] = brightness;
+            _stream.WriteAsync(report);
         }
         catch { }
     }
