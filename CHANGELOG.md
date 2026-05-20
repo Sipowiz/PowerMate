@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-05-20
+
+### Fixed
+- Accidental volume change immediately after releasing from FF/RW — 500 ms input guard blocks rotation on button release
+
+## [1.4.0] - 2026-05-20
+
+### Added
+- Survive sleep/hibernate: audio capture stops before suspend and restarts (with 2 s delay for WASAPI reinit) on resume
+- Crash logging to `%AppData%\PowerMate\crash.log` for unhandled exceptions and unobserved task exceptions
+- Tests for crash logging and power management suspend/resume
+
+### Changed
+- Audio-pulse LED falls back to static volume indicator when playback is paused or stopped; resumes pulsing when playback starts again
+- App icon and shortcuts now use a transparent-background knob design (no dark rounded rectangle)
+- Installer shortcuts point to `powermate.ico` explicitly; shell icon cache flushed post-install
+
 ## [1.3.0] - 2026-05-19
 
 ### Added

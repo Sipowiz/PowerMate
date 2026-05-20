@@ -30,6 +30,10 @@ public class PowerMateController : IDisposable
     // Overridable by tests via InternalsVisibleTo.
     internal int IdleTimeoutMs        = 2000;
     internal int ResumeCaptureDelayMs = 2000;
+    internal int FfRwReleaseGuardMs   = 500;
+
+    private volatile bool _ffRwReleaseGuard;
+    private Timer? _ffRwReleaseGuardTimer;
 
     // ── Audio-peak LED pulse (idle) ───────────────────────────────────────────
     private Timer? _audioPulseTimer;
@@ -144,8 +148,9 @@ public class PowerMateController : IDisposable
             return;
         }
 
-        // Normal volume – ignore during multi-tap window
+        // Normal volume – ignore during multi-tap window or FF/RW release guard
         if (Volatile.Read(ref _tapCount) > 0) return;
+        if (_ffRwReleaseGuard) return;
 
         int delta = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
@@ -216,6 +221,11 @@ public class PowerMateController : IDisposable
             SetInteractionMode(InteractionMode.Idle);
             if (!_config.LedPulseOnAudio)
                 _hid.SetLed((byte)(_audio.GetLevel() * 255));
+
+            _ffRwReleaseGuard = true;
+            _ffRwReleaseGuardTimer?.Dispose();
+            _ffRwReleaseGuardTimer = new Timer(_ => _ffRwReleaseGuard = false,
+                null, FfRwReleaseGuardMs, Timeout.Infinite);
             return;
         }
 
@@ -342,6 +352,7 @@ public class PowerMateController : IDisposable
         _volumeOverrideTimer?.Dispose();
         _audioPulseTimer?.Dispose();
         _ffRwLedTimer?.Dispose();
+        _ffRwReleaseGuardTimer?.Dispose();
         _idleTimer?.Dispose();
         _hid.Dispose();
         _audio.Dispose();
