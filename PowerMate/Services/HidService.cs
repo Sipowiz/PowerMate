@@ -11,7 +11,6 @@ public class HidService : IHidService
 
     private HidDevice? _device;
     private HidStream? _stream;
-    private string?    _devicePath;
     private readonly CancellationTokenSource _cts = new();
     private volatile bool _suspended;
 
@@ -21,31 +20,6 @@ public class HidService : IHidService
     public event Action<bool>? ConnectionChanged;
 
     public bool IsConnected { get; private set; }
-
-    // ── Win32 P/Invoke ────────────────────────────────────────────────────────
-    [DllImport("hid.dll", SetLastError = true)]
-    private static extern bool HidD_SetFeature(
-        SafeFileHandle hDevice, byte[] reportBuffer, int reportBufferLength);
-
-    [DllImport("hid.dll", SetLastError = true)]
-    private static extern bool HidD_SetOutputReport(
-        SafeFileHandle hDevice, byte[] reportBuffer, int reportBufferLength);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool WriteFile(
-        SafeFileHandle hFile, byte[] buffer, int bytesToWrite,
-        out int bytesWritten, IntPtr overlapped);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern SafeFileHandle CreateFile(
-        string lpFileName, uint dwDesiredAccess, uint dwShareMode,
-        IntPtr lpSecurityAttributes, uint dwCreationDisposition,
-        uint dwFlagsAndAttributes, IntPtr hTemplateFile);
-
-    private const uint GENERIC_WRITE   = 0x40000000;
-    private const uint FILE_SHARE_READ  = 0x00000001;
-    private const uint FILE_SHARE_WRITE = 0x00000002;
-    private const uint OPEN_EXISTING    = 3;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     public void Start()
@@ -91,14 +65,13 @@ public class HidService : IHidService
             _device = DeviceList.Local.GetHidDeviceOrNull(VendorId, ProductId);
             if (_device == null) return;
 
-            _devicePath = _device.DevicePath;
             _stream = _device.Open();
             _stream.ReadTimeout = 500;
             IsConnected = true;
             ConnectionChanged?.Invoke(true);
             SetLed(128);
         }
-        catch { _device = null; _stream = null; _devicePath = null; }
+        catch { _device = null; _stream = null; }
     }
 
     private void Disconnect()
@@ -106,7 +79,6 @@ public class HidService : IHidService
         _stream?.Dispose();
         _stream      = null;
         _device      = null;
-        _devicePath  = null;
         IsConnected  = false;
         ConnectionChanged?.Invoke(false);
     }
