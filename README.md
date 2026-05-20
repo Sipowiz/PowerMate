@@ -13,20 +13,23 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 ## Features
 
 - **Volume Control** — Rotate the knob to adjust system volume with configurable step size, sensitivity, and invert option
-- **Media Keys** — Single, double, and triple click for play/pause, next track, and previous track (all configurable)
-- **Long Press** — Configurable long-press action (mute, play/pause, or none)
-- **LED Feedback** — LED brightness reflects current volume level in real time
-- **Audio-Reactive LED** — LED pulses to audio output with optional bass-only mode using FFT analysis
-- **Bass Detection** — Configurable frequency cutoff and gain for bass-reactive LED mode
-- **System Tray** — Tray icon with a blue volume arc indicator that updates live; mute state shown with a red X overlay
-- **Settings UI** — Dark-themed settings window with auto-save (400ms debounce)
+- **Media Keys** — Single, double, and triple click for play/pause, next track, and previous track
+- **Long Press** — Mute/unmute on long press (configurable threshold)
+- **Fast-Forward / Rewind** — Hold button and rotate to seek in the current media track; configurable seek step (1–30 s)
+- **LED Feedback** — LED brightness reflects current volume level; falls back to volume when media is paused or stopped
+- **Audio-Reactive LED** — LED pulses to audio output using WASAPI loopback RMS capture; optional bass-only mode with FFT analysis and configurable cutoff/gain
+- **System Tray** — Dynamic tray icon shows a live blue volume arc, playback state symbol, and mute indicator
+- **SMTC Integration** — Reads media session state (play/pause/stop) and flashes a skip symbol on the tray icon for next/previous track
+- **Sleep/Hibernate** — Survives system suspend: audio capture stops cleanly before sleep and restarts automatically on resume
+- **Crash Logging** — Unhandled exceptions written to `%AppData%\PowerMate\crash.log`
+- **Settings UI** — Dark-themed settings window with auto-save
 - **Start with Windows** — Optional startup registration
-- **Installer** — Inno Setup installer with desktop shortcut and uninstall support
+- **Installer** — Inno Setup installer with desktop shortcut, Start menu entry, and uninstall support
 
 ## Screenshot
 
 <p align="center">
-  <img src="Screenshot.png" alt="PowerMate Settings" />
+  <img src="Screenshot.gif" alt="PowerMate Settings" />
 </p>
 
 ## Requirements
@@ -58,19 +61,18 @@ Settings are stored in `%APPDATA%\PowerMate\config.json` and are auto-saved when
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| VolumeStep | 2 | Volume change per knob tick |
-| Sensitivity | 1.0 | Rotation sensitivity multiplier |
+| VolumeStep | 2 | Volume change per knob tick (1–10) |
+| Sensitivity | 1.0 | Rotation sensitivity multiplier (0.5–3.0) |
 | InvertRotation | false | Reverse rotation direction |
-| ClickAction | PlayPause | Single click: PlayPause, Mute/Unmute, or None |
-| DoubleClickAction | NextTrack | Double click: NextTrack, PlayPause, Mute/Unmute, or None |
-| TripleClickAction | PreviousTrack | Triple click: PreviousTrack, PlayPause, Mute/Unmute, or None |
-| LongPressAction | Mute | Long press: Mute/Unmute, PlayPause, or None |
-| LongPressMs | 800 | Long press threshold in milliseconds |
+| LongPressMs | 800 | Long-press threshold in milliseconds (300–2000) |
+| TapWindowMs | 350 | Multi-tap detection window in milliseconds (150–800) |
 | LedBrightness | 128 | Base LED brightness (0–255) |
 | LedPulseOnAudio | false | Pulse LED to audio output |
 | LedBassOnly | false | Pulse LED to bass frequencies only |
-| BassFrequencyCutoff | 250 | Max frequency (Hz) for bass detection |
-| BassGain | 5.0 | Bass level multiplier |
+| BassFrequencyCutoff | 250 | Max frequency (Hz) for bass detection (60–500) |
+| BassGain | 5.0 | Bass level multiplier (0.5–50) |
+| FfRwThreshold | 3 | Rotation steps while held before entering FF/RW mode (1–10) |
+| FfRwStepSeconds | 5 | Seconds to seek per rotation step during FF/RW (1–30) |
 | StartWithWindows | false | Launch on Windows startup |
 
 ## Architecture
@@ -82,19 +84,24 @@ PowerMate/
 ├── Services/
 │   ├── IHidService.cs            # HID device interface
 │   ├── IAudioService.cs          # Audio control interface
+│   ├── IMediaSessionService.cs   # SMTC media session interface
 │   ├── HidService.cs             # PowerMate HID communication
-│   ├── AudioService.cs           # NAudio volume + FFT bass detection
-│   ├── PowerMateController.cs    # Main controller (multi-tap, LED, events)
+│   ├── AudioService.cs           # NAudio volume + WASAPI loopback + FFT
+│   ├── MediaSessionService.cs    # Windows SMTC integration
+│   ├── PowerMateController.cs    # Main controller (multi-tap, FF/RW, LED)
 │   ├── MediaKeyService.cs        # Simulated media key input
+│   ├── UpdateService.cs          # GitHub release update checker
 │   └── StartupService.cs         # Windows startup registration
 ├── ViewModels/
 │   └── SettingsViewModel.cs      # MVVM with debounced auto-save
 ├── Views/
-│   ├── SettingsPage.xaml          # Dark-themed settings UI
-│   └── SettingsPage.xaml.cs
+│   ├── SettingsPage.xaml         # Dark-themed settings UI
+│   ├── SettingsPage.xaml.cs
+│   ├── CreditsPage.xaml          # About / credits page
+│   └── CreditsPage.xaml.cs
 └── Platforms/Windows/
-    ├── App.xaml.cs                # WinUI app + tray icon management
-    └── TrayIconRenderer.cs       # GDI+ volume arc icon
+    ├── App.xaml.cs               # WinUI app, tray icon, power management
+    └── TrayIconRenderer.cs       # GDI+ dynamic tray icon renderer
 ```
 
 ## Dependencies
@@ -112,7 +119,7 @@ PowerMate/
 dotnet test PowerMate.Tests/PowerMate.Tests.csproj
 ```
 
-24 unit tests covering rotation, multi-tap detection, long press, LED updates, config persistence, and connection events. Uses xUnit and NSubstitute.
+66 unit tests covering rotation, multi-tap detection, long press, FF/RW, LED updates, audio-pulse fallback, power management (suspend/resume), crash logging, config persistence, and connection events. Uses xUnit and NSubstitute.
 
 ## CI/CD
 
