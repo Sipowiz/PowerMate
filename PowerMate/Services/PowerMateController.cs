@@ -337,10 +337,12 @@ public class PowerMateController : IDisposable
         _audioPulseTimer?.Dispose();
         _audioPulseTimer = null;
         _audio.StopCapture();
+        _hid.Suspend();
     }
 
     public void Resume()
     {
+        _hid.Resume();
         // Delay audio restart to allow WASAPI to reinitialize after sleep/hibernate
         _ = Task.Delay(ResumeCaptureDelayMs).ContinueWith(_ => ApplyAudioPulse());
     }

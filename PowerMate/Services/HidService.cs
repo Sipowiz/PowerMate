@@ -13,6 +13,7 @@ public class HidService : IHidService
     private HidStream? _stream;
     private string?    _devicePath;
     private readonly CancellationTokenSource _cts = new();
+    private volatile bool _suspended;
 
     public event Action<int>?  Rotated;           // +1 CW, -1 CCW
     public event Action?       ButtonPressed;
@@ -57,6 +58,8 @@ public class HidService : IHidService
     {
         while (!_cts.IsCancellationRequested)
         {
+            if (_suspended) { Thread.Sleep(500); continue; }
+
             if (!IsConnected)
             {
                 TryConnect();
@@ -67,6 +70,18 @@ public class HidService : IHidService
             catch (TimeoutException) { /* normal — no input within 500 ms */ }
             catch { Disconnect(); }
         }
+    }
+
+    public void Suspend()
+    {
+        _suspended = true;
+        Disconnect();
+    }
+
+    public void Resume()
+    {
+        _suspended = false;
+        // PollLoop auto-reconnects on next iteration
     }
 
     private void TryConnect()

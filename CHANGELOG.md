@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.3] - 2026-05-20
+
+### Fixed
+- App killed by Windows during hibernate — HID stream now closed before suspend (`HidService.Suspend()`) so Windows can safely suspend the USB bus; stream reconnects automatically on resume
+
 ## [1.4.2] - 2026-05-20
 
 ### Fixed

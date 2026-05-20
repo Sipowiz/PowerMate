@@ -8,5 +8,7 @@ public interface IHidService : IDisposable
     event Action<bool>? ConnectionChanged;
     bool IsConnected { get; }
     void Start();
+    void Suspend();
+    void Resume();
     void SetLed(byte brightness);
 }

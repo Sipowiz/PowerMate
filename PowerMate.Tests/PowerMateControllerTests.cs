@@ -732,6 +732,20 @@ public class PowerMateControllerTests : IDisposable
     }
 
     [Fact]
+    public void Suspend_CallsHidSuspend()
+    {
+        _controller.Suspend();
+        _hid.Received(1).Suspend();
+    }
+
+    [Fact]
+    public void Resume_CallsHidResume()
+    {
+        _controller.Resume();
+        _hid.Received(1).Resume();
+    }
+
+    [Fact]
     public void Suspend_WhenPulseOn_StopsCapture()
     {
         _config.LedPulseOnAudio = true;
