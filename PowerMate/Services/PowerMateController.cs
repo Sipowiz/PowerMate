@@ -64,6 +64,7 @@ public class PowerMateController : IDisposable
         _hid.ButtonReleased    += OnButtonReleased;
         _hid.ConnectionChanged += c => ConnectionChanged?.Invoke(c);
         _audio.VolumeChanged   += OnSystemVolumeChanged;
+        _media.RegisterHandler(() => InteractionModeChanged += _media.OnInteractionModeChanged);
     }
 
     public void Start()
@@ -123,11 +124,15 @@ public class PowerMateController : IDisposable
 
     private void OnRotated(int direction)
     {
+        int delta = _config.InvertRotation ? -direction : direction;
         if (_buttonDown)
         {
-            Interlocked.Increment(ref _rotationStepsWhileHeld);
+            if (delta > 0)
+                Interlocked.Increment(ref _rotationStepsWhileHeld);
+            else
+                Interlocked.Decrement(ref _rotationStepsWhileHeld);
 
-            if (!_ffRwActive && _rotationStepsWhileHeld >= _config.FfRwThreshold)
+            if (!_ffRwActive && Math.Abs(_rotationStepsWhileHeld) >= _config.FfRwThreshold)
             {
                 _ffRwActive = true;
                 // Cancel long-press and tap timers — FF/RW takes over.
@@ -140,9 +145,8 @@ public class PowerMateController : IDisposable
 
             if (_ffRwActive)
             {
-                int d = _config.InvertRotation ? -direction : direction;
                 _ = _media.SeekRelativeAsync(
-                    TimeSpan.FromSeconds(d * _config.FfRwStepSeconds));
+                    TimeSpan.FromSeconds(_rotationStepsWhileHeld * _config.FfRwStepSeconds));
                 // FF/RW stays active while the button is held; button release handles exit.
             }
             return;
@@ -152,7 +156,6 @@ public class PowerMateController : IDisposable
         if (Volatile.Read(ref _tapCount) > 0) return;
         if (_ffRwReleaseGuard) return;
 
-        int delta = _config.InvertRotation ? -direction : direction;
         float step = (_config.VolumeStep / 100f) * _config.Sensitivity;
 
         _selfChanging = true;
