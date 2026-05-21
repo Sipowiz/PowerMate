@@ -200,14 +200,23 @@ public class AudioService : IAudioService
 
     public void StopCapture()
     {
-        if (_capture == null) return;
-        _capture.DataAvailable    -= OnLoopbackData;
-        _capture.RecordingStopped -= OnCaptureStopped;
-        try { _capture.StopRecording(); } catch { }
-        try { _capture.Dispose(); }      catch { }
+        var cap = _capture;
+        if (cap == null) return;
         _capture  = null;
-        _bassPeak = 0;
         _peak     = 0;
+        _bassPeak = 0;
+
+        cap.DataAvailable    -= OnLoopbackData;
+        cap.RecordingStopped -= OnCaptureStopped;
+
+        // StopRecording/Dispose can block when the audio driver is shutting down
+        // (e.g. during hibernate). Run on a pool thread so the WndProc returns
+        // immediately and Windows can proceed with the suspend without killing us.
+        Task.Run(() =>
+        {
+            try { cap.StopRecording(); } catch { }
+            try { cap.Dispose();       } catch { }
+        });
     }
 
     private void OnLoopbackData(object? sender, WaveInEventArgs e)

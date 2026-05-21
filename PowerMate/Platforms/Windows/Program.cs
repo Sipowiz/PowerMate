@@ -8,6 +8,9 @@ public static class Program
     static void Main(string[] args)
     {
         MauiProgram.ConfigureLogging();
+        var version = System.Reflection.Assembly.GetExecutingAssembly()
+            .GetName().Version?.ToString() ?? "unknown";
+        Log.Information("PowerMate {Version} starting", version);
         try
         {
             global::WinRT.ComWrappersSupport.InitializeComWrappers();

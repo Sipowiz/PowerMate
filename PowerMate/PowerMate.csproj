@@ -11,9 +11,9 @@
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
     <ApplicationTitle>PowerMate Driver</ApplicationTitle>
     <ApplicationId>com.powermate.driver</ApplicationId>
-    <ApplicationDisplayVersion>1.4.4</ApplicationDisplayVersion>
-    <ApplicationVersion>9</ApplicationVersion>
-    <Version>1.4.4</Version>
+    <ApplicationDisplayVersion>1.4.5</ApplicationDisplayVersion>
+    <ApplicationVersion>10</ApplicationVersion>
+    <Version>1.4.5</Version>
     <WindowsPackageType>None</WindowsPackageType>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</TargetPlatformMinVersion>

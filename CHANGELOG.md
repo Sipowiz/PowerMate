@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.5] - 2026-05-21
+
+### Fixed
+- App force-killed during hibernate with no crash log — `WasapiLoopbackCapture.StopRecording()` and `Dispose()` were called synchronously on the WndProc thread; when the audio driver shuts down concurrently during hibernate the COM call blocks, Windows' power-suspend timeout expires, and the process is killed before any managed handler runs; teardown is now fire-and-forget on a thread pool thread so the WndProc returns immediately
+
+### Added
+- Startup log entry (`PowerMate x.y.z starting`) written on every launch, creating the log file immediately so future hibernation post-mortems can confirm which version was running and that logging is functional
+
 ## [1.4.4] - 2026-05-20
 
 ### Fixed
