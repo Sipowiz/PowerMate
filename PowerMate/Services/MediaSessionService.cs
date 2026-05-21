@@ -7,6 +7,7 @@ public class MediaSessionService : IMediaSessionService
 {
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private GlobalSystemMediaTransportControlsSession? _session;
+    private GlobalSystemMediaTransportControlsSessionTimelineProperties? _tl;
 
     private PlaybackState _state = PlaybackState.Unknown;
     private bool _isPlaying;
@@ -19,6 +20,19 @@ public class MediaSessionService : IMediaSessionService
     public MediaSessionService()
     {
         _ = InitAsync();
+    }
+
+    public void OnInteractionModeChanged(InteractionMode interactionMode)
+    {
+        if (interactionMode == InteractionMode.FfRw)
+        {
+            RefreshTimeline();
+        }
+    }
+
+    public void RegisterHandler(Action action)
+    {
+        action?.Invoke();
     }
 
     private async Task InitAsync()
@@ -95,10 +109,10 @@ public class MediaSessionService : IMediaSessionService
         try
         {
             if (_session == null) return;
-            var tl = _session.GetTimelineProperties();
-            _lastKnownPosition = tl.Position;
+            _tl = _session.GetTimelineProperties();
+            _lastKnownPosition = _tl.Position;
             _lastPositionStamp = DateTime.UtcNow;
-            _duration          = tl.EndTime - tl.StartTime;
+            _duration          = _tl.EndTime - _tl.StartTime;
         }
         catch { }
     }
@@ -125,19 +139,16 @@ public class MediaSessionService : IMediaSessionService
 
     public async Task SeekRelativeAsync(TimeSpan delta)
     {
-        if (_session == null) return;
         try
         {
-            var tl = _session.GetTimelineProperties();
-
-            var newPos = tl.Position + delta;
+            if (_session == null || _tl == null) return;
+            var newPos = _tl.Position + delta;
             newPos = TimeSpan.FromSeconds(
                 Math.Clamp(newPos.TotalSeconds,
-                    tl.StartTime.TotalSeconds,
-                    tl.EndTime.TotalSeconds));
+                    _tl.StartTime.TotalSeconds,
+                    _tl.EndTime.TotalSeconds));
 
-            await _session.TryChangePlaybackPositionAsync(
-                (long)(newPos.TotalSeconds * 10_000_000)); // 100-ns ticks
+            await _session.TryChangePlaybackPositionAsync(newPos.Ticks);
 
             _lastKnownPosition = newPos;
             _lastPositionStamp = DateTime.UtcNow;
