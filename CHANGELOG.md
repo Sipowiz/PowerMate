@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.6] - 2026-05-26
+
+### Fixed
+- Device disconnects when setting LED brightness — replaced Win32 P/Invoke calls (`CreateFile`, `HidD_SetFeature`, `HidD_SetOutputReport`, `WriteFile`) with HidSharp async stream write, eliminating handle conflicts that caused the HID device to disconnect; volume knob is now instantly responsive after brightness changes
+
 ## [1.4.5] - 2026-05-21
 
 ### Fixed

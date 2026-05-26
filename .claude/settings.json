@@ -6,7 +6,26 @@
       "Bash(Stop-Process -Name PowerMate -ErrorAction SilentlyContinue)",
       "Bash(Start-Sleep -Milliseconds 500)",
       "PowerShell(Stop-Process -Id 58656 -Force -ErrorAction SilentlyContinue)",
-      "PowerShell(Stop-Process -Id 38876 -Force -ErrorAction SilentlyContinue)"
+      "PowerShell(Stop-Process -Id 38876 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-WinEvent -LogName \"Application\" -MaxEvents 200 | Where-Object { $_.LevelDisplayName -in @\\(\"Error\",\"Critical\"\\) } | Select-Object TimeCreated, LevelDisplayName, ProviderName, @{N='Msg';E={$_.Message.Substring\\(0,[Math]::Min\\(200,$_.Message.Length\\)\\)}} | Format-Table -AutoSize)",
+      "PowerShell(Get-WinEvent -LogName \"Application\" -MaxEvents 200 | Where-Object { $_.ProviderName -eq \"Windows Error Reporting\" } | Select-Object -First 5 | ForEach-Object { $_.Message })",
+      "PowerShell(Get-WinEvent -LogName \"Application\" -MaxEvents 500 | Where-Object { $_.ProviderName -match \"Application Error|\\\\.NET Runtime|Application Hang|Windows Error Reporting\" } | Select-Object TimeCreated, ProviderName, @{N='Msg';E={$_.Message.Substring\\(0,[Math]::Min\\(400,$_.Message.Length\\)\\)}} | Format-List | Select-Object -First 30)",
+      "PowerShell(Get-WinEvent -LogName \"Application\" -MaxEvents 2000 | Where-Object { $_.ProviderName -eq \"Application Error\" -or \\($_.ProviderName -eq \"Windows Error Reporting\" -and $_.Message -notmatch \"LiveKernelEvent\"\\) } | Select-Object TimeCreated, ProviderName, @{N='Msg';E={$_.Message.Substring\\(0,[Math]::Min\\(300,$_.Message.Length\\)\\)}} | Select-Object -First 10 | Format-List)",
+      "PowerShell(Get-ChildItem \"C:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\WER\\\\ReportQueue\" -Directory | Where-Object { $_.Name -match \"PowerMate|dotnet|MAUI\" } | Select-Object Name, LastWriteTime)",
+      "PowerShell(Get-Command inkscape, magick, convert -ErrorAction SilentlyContinue)",
+      "Bash(dotnet publish *)",
+      "PowerShell(& \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\" \"C:\\\\Users\\\\vpsip\\\\source\\\\repos\\\\PowerMate\\\\installer.iss\" 2>&1)",
+      "PowerShell($path = \"$env:APPDATA\\\\PowerMate\\\\crash.log\"; if \\(Test-Path $path\\) { Get-Content $path } else { \"File not found: $path\" })",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\vpsip\\\\source\\\\repos\\\\PowerMate\\\\PowerMate\\\\obj\\\\Debug\\\\net10.0-windows10.0.19041.0\\\\win-x64\\\\Platforms\\\\Windows\\\\\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(Stop-Process -Id 40112 -Force -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git tag *)",
+      "Bash(git push *)",
+      "Bash(ls \"c:/Users/vpsip/AppData/Roaming/PowerMate/\" 2>/dev/null || echo \"directory not found\")",
+      "Read(//c/Users/vpsip/AppData/Roaming/PowerMate/**)",
+      "PowerShell(Get-WinEvent -LogName Application -MaxEvents 500 | Where-Object { $_.TimeCreated -gt \\(Get-Date\\).AddHours\\(-14\\) -and $_.Id -in @\\(1000,1001,1026\\) } | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Msg';E={$_.Message.Substring\\(0,[Math]::Min\\(400,$_.Message.Length\\)\\)}} | Format-List)",
+      "PowerShell(Get-WinEvent -LogName Application -MaxEvents 1000 | Where-Object { $_.TimeCreated -gt \\(Get-Date\\).AddHours\\(-14\\) } | Where-Object { $_.Message -match 'PowerMate|\\\\.NET Runtime|Application Error' } | Select-Object TimeCreated, Id, LevelDisplayName, @{N='Msg';E={$_.Message.Substring\\(0,[Math]::Min\\(500,$_.Message.Length\\)\\)}} | Format-List)"
     ]
   }
 }
