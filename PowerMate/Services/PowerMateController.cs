@@ -100,6 +100,7 @@ public class PowerMateController : IDisposable
         _longPressFired         = false;
         _ffRwActive             = false;
         _rotationStepsWhileHeld = 0;
+        StopFfRw(graceful: false); // device is gone; do not seek on the way out
 
         _longPressTimer?.Dispose(); _longPressTimer = null;
         _tapTimer?.Dispose();       _tapTimer       = null;
@@ -168,9 +169,11 @@ public class PowerMateController : IDisposable
     {
         if (_buttonDown)
         {
-            Interlocked.Increment(ref _rotationStepsWhileHeld);
+            // Magnitude only: a CW step followed by a CCW step still means the user
+            // is spinning, so both count toward entering FF/RW.
+            int total = Interlocked.Increment(ref _rotationStepsWhileHeld);
 
-            if (!_ffRwActive && _rotationStepsWhileHeld >= _config.FfRwThreshold)
+            if (!_ffRwActive && total >= _config.FfRwThreshold)
             {
                 _ffRwActive = true;
                 // Cancel long-press and tap timers — FF/RW takes over.
@@ -179,13 +182,13 @@ public class PowerMateController : IDisposable
                 Interlocked.Exchange(ref _tapCount, 0);
                 Interlocked.Increment(ref _tapGeneration);
                 SetInteractionMode(InteractionMode.FfRw);
+                EnterFfRw();
             }
 
             if (_ffRwActive)
             {
-                int d = _config.InvertRotation ? -direction : direction;
-                _ = _media.SeekRelativeAsync(
-                    TimeSpan.FromSeconds(d * _config.FfRwStepSeconds));
+                _ffRwSteps += _config.InvertRotation ? -direction : direction;
+                UpdateFfRwTarget();
                 // FF/RW stays active while the button is held; button release handles exit.
             }
             return;
@@ -261,6 +264,7 @@ public class PowerMateController : IDisposable
         if (_ffRwActive)
         {
             _ffRwActive = false;
+            StopFfRw(graceful: true);
             SetInteractionMode(InteractionMode.Idle);
             if (!_config.LedPulseOnAudio)
                 WriteLed(_audio.GetLevel());
@@ -323,12 +327,162 @@ public class PowerMateController : IDisposable
         VolumeChanged?.Invoke(_audio.GetLevel(), _audio.IsMuted());
     }
 
+    // ── FF/RW seeking ─────────────────────────────────────────────────────────
+    //
+    // SMTC keeps reporting the pre-seek position for tens of milliseconds after a
+    // seek lands, so asking it "where am I now?" once per detent makes every step
+    // compute from the same stale base — the position oscillates instead of
+    // advancing (issue #4). Instead the anchor is captured exactly once when the
+    // gesture starts and never re-read, detents accumulate into a signed offset,
+    // and a single pump applies the latest absolute target with at most one seek
+    // in flight. All per-gesture state lives in one object so a pump still
+    // draining from the previous gesture can never act on the next one's target.
+
+    private sealed class FfRwGesture
+    {
+        public readonly SemaphoreSlim Signal = new(0, 1);
+        public readonly CancellationTokenSource Cts = new();
+        public long AnchorTicks;
+        public long DurationTicks;
+        public long TargetTicks;
+        public int  GenerationAtEntry;
+        public volatile bool StopRequested;
+        public volatile bool SeekSupported = true;
+        public Task? Pump;
+    }
+
+    private FfRwGesture? _ffRw;   // swapped via Interlocked; read via Volatile
+    private int _ffRwSteps;       // signed detent offset; HID thread only
+
+    private void EnterFfRw()
+    {
+        _ffRwSteps = 0; // detents spent crossing the threshold don't also seek
+
+        // GetPosition/GetDuration are synchronous cache reads. If they ever become
+        // blocking COM calls this must move off the HID poll thread.
+        var g = new FfRwGesture
+        {
+            AnchorTicks       = _media.GetPosition().Ticks,
+            DurationTicks     = _media.GetDuration().Ticks,
+            GenerationAtEntry = _media.GetSessionGeneration(),
+        };
+        g.TargetTicks = g.AnchorTicks;
+        Interlocked.Exchange(ref _ffRw, g);
+        g.Pump = Task.Run(() => FfRwPumpAsync(g));
+    }
+
+    // HID thread only.
+    private void UpdateFfRwTarget()
+    {
+        var g = Volatile.Read(ref _ffRw);
+        if (g == null) return;
+
+        long stepTicks = (long)_config.FfRwStepSeconds * TimeSpan.TicksPerSecond;
+        long target    = g.AnchorTicks + _ffRwSteps * stepTicks;
+        target = g.DurationTicks > 0 ? Math.Clamp(target, 0, g.DurationTicks)
+                                     : Math.Max(target, 0);
+
+        Interlocked.Exchange(ref g.TargetTicks, target);
+        Wake(g);
+    }
+
+    private static void Wake(FfRwGesture g)
+    {
+        // The pump may have already exited and cleaned up (e.g. the session refused
+        // a seek), leaving detents to arrive against a disposed semaphore.
+        try
+        {
+            if (g.Signal.CurrentCount == 0) g.Signal.Release(); // collapse bursts to one wake
+        }
+        catch (SemaphoreFullException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    // The only awaiter of SeekToAsync, so at most one seek is ever in flight and
+    // completions cannot arrive out of order.
+    private async Task FfRwPumpAsync(FfRwGesture g)
+    {
+        long applied = long.MinValue;
+        var ct = g.Cts.Token;
+        try
+        {
+            while (true)
+            {
+                await g.Signal.WaitAsync(ct);
+
+                while (true)
+                {
+                    if (ct.IsCancellationRequested) return;
+
+                    // The track changed under us; seeking now would scrub the new one.
+                    if (_media.GetSessionGeneration() != g.GenerationAtEntry)
+                    {
+                        g.SeekSupported = false;
+                        return;
+                    }
+
+                    long target = Interlocked.Read(ref g.TargetTicks);
+                    if (target == applied) break;   // caught up; wait for the next detent
+                    applied = target;
+
+                    bool ok;
+                    try { ok = await _media.SeekToAsync(TimeSpan.FromTicks(target)); }
+                    catch { ok = false; }
+
+                    if (ct.IsCancellationRequested) return; // released and cancelled mid-seek
+                    if (!ok) { g.SeekSupported = false; return; } // session cannot seek
+                }
+
+                if (g.StopRequested) return; // released: the final flick has landed
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            g.Cts.Dispose();
+            g.Signal.Dispose();
+        }
+    }
+
+    /// <param name="graceful">
+    /// true on button release: let the pump apply the last target, then exit.
+    /// false on disconnect/dispose: abandon immediately, issuing no further seek.
+    /// </param>
+    private void StopFfRw(bool graceful)
+    {
+        var g = Interlocked.Exchange(ref _ffRw, null);
+        _ffRwSteps = 0;
+        if (g == null) return;
+
+        if (graceful)
+        {
+            g.StopRequested = true;
+            Wake(g);
+        }
+        else
+        {
+            // The pump disposes its own CTS on exit, so it may already be gone.
+            try { g.Cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        // Never awaited — the HID thread must not block on a seek.
+    }
+
+    /// <summary>Where the user is seeking TO, so the LED and tray don't stutter on stale SMTC values.</summary>
+    public float GetFfRwFraction()
+    {
+        var g = Volatile.Read(ref _ffRw);
+        if (g != null && g.SeekSupported && g.DurationTicks > 0)
+            return Math.Clamp(Interlocked.Read(ref g.TargetTicks) / (float)g.DurationTicks, 0f, 1f);
+
+        return _media.GetPlaybackPosition();
+    }
+
     // ── FF/RW LED tick ────────────────────────────────────────────────────────
 
     private void FfRwLedTick(object? _)
     {
         if (!_hid.IsConnected) return;
-        WriteLed(_media.GetPlaybackPosition());
+        WriteLed(GetFfRwFraction());
     }
 
     // ── Audio-peak LED pulse (idle mode) ──────────────────────────────────────
@@ -391,6 +545,7 @@ public class PowerMateController : IDisposable
 
     public void Dispose()
     {
+        StopFfRw(graceful: false);
         _longPressTimer?.Dispose();
         _tapTimer?.Dispose();
         _volumeOverrideTimer?.Dispose();

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.8] - 2026-07-09
+
+### Fixed
+- Fast-forward/rewind jumped around and looped instead of seeking smoothly ([#4](https://github.com/Sipowiz/PowerMate/issues/4)) — each detent fired a fire-and-forget `SeekRelativeAsync` that re-read the timeline from SMTC, which keeps reporting the pre-seek position for tens of milliseconds afterwards, so overlapping seeks all computed from the same stale base. FF/RW now captures the position **once** when the gesture starts, accumulates detents into a signed offset, and a single pump applies the latest absolute target with at most one seek in flight
+- The 1.4.7 rotation fix made this worse before it made it better: decoding every detent (rather than dropping the batched ones) meant a fast spin issued 2–4× more overlapping seeks
+- Track position on the LED and tray icon stuttered during FF/RW, because both read the lagging SMTC position rather than where the user was seeking to
+- Seeking continued after the knob was unplugged mid-gesture, and a track auto-advancing mid-gesture would scrub the new track
+
+### Changed
+- `IMediaSessionService.SeekRelativeAsync` replaced by the stateless, absolute `SeekToAsync`, plus `GetPosition()`, `GetDuration()` and `GetSessionGeneration()`. The caller owns the anchor, so the media layer no longer writes any position back
+- Sessions that refuse a seek are detected once and left alone, instead of being hammered on every detent
+
 ## [1.4.7] - 2026-07-09
 
 ### Fixed
