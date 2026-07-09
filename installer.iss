@@ -7,7 +7,7 @@
 
 #define MyAppName      "PowerMate Driver"
 #ifndef MyAppVersion
-  #define MyAppVersion   "1.4.3"
+  #define MyAppVersion   "1.4.7"
 #endif
 #define MyAppPublisher "PowerMate"
 #define MyAppExeName   "PowerMate.exe"
@@ -30,7 +30,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\powermate.ico
+UninstallDisplayIcon={app}\Resources\AppIcon\powermate.ico
 CloseApplications=force
 RestartApplications=no
 
@@ -39,16 +39,29 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
-Name: "startupentry"; Description: "Start with &Windows"; GroupDescription: "Startup:"
+Name: "startupentry"; Description: "Start with &Windows"; GroupDescription: "Startup:"; Flags: unchecked
+
+[InstallDelete]
+; Installers up to 1.4.6 registered autostart with this shortcut. Autostart now
+; lives in the Run value below, so strip the shortcut or the app launches twice.
+Type: files; Name: "{userstartup}\{#MyAppName}.lnk"
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Registry]
+; Single source of truth for autostart, shared with StartupService.cs. The triple
+; quotes emit a literal quoted path — the default install dir contains a space.
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "PowerMateDriver"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startupentry
+; Unticking the box on an upgrade must actually disable autostart.
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "PowerMateDriver"; Flags: deletevalue; Tasks: not startupentry
+; Always clean up on uninstall, even when the app (not the installer) wrote it.
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "PowerMateDriver"; Flags: uninsdeletevalue
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Resources\AppIcon\powermate.ico"; Tasks: startupentry
 
 [Run]
 ; Flush the shell icon cache so the new icon appears immediately in taskbar and Start menu

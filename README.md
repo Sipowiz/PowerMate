@@ -66,14 +66,17 @@ Settings are stored in `%APPDATA%\PowerMate\config.json` and are auto-saved when
 | InvertRotation | false | Reverse rotation direction |
 | LongPressMs | 800 | Long-press threshold in milliseconds (300–2000) |
 | TapWindowMs | 350 | Multi-tap detection window in milliseconds (150–800) |
-| LedBrightness | 128 | Base LED brightness (0–255) |
+| LedBrightness | 255 | Maximum LED brightness (0–255) |
 | LedPulseOnAudio | false | Pulse LED to audio output |
 | LedBassOnly | false | Pulse LED to bass frequencies only |
 | BassFrequencyCutoff | 250 | Max frequency (Hz) for bass detection (60–500) |
 | BassGain | 5.0 | Bass level multiplier (0.5–50) |
 | FfRwThreshold | 3 | Rotation steps while held before entering FF/RW mode (1–10) |
 | FfRwStepSeconds | 5 | Seconds to seek per rotation step during FF/RW (1–30) |
-| StartWithWindows | false | Launch on Windows startup |
+
+"Start with Windows" is not stored here — it lives in the `HKCU\...\CurrentVersion\Run`
+registry value, which the installer writes too, so the setting and the installer can
+never disagree.
 
 ## Architecture
 

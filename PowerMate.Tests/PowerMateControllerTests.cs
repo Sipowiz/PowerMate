@@ -600,6 +600,95 @@ public class PowerMateControllerTests : IDisposable
         Assert.False(connected);
     }
 
+    [Fact]
+    public async Task Disconnect_WhileButtonHeld_CancelsPendingLongPress()
+    {
+        // Unplugging mid-press must not leave a long-press timer armed to fire mute.
+        _hid.ButtonPressed     += Raise.Event<Action>();
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(false);
+
+        await Task.Delay(LongPress + 100);
+
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public async Task Disconnect_WhileButtonHeld_ReleaseAfterwardIsIgnored()
+    {
+        // A release arriving after the reset must not be counted as a tap, which
+        // would make the user's next single click read as a double tap.
+        _hid.ButtonPressed     += Raise.Event<Action>();
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(false);
+
+        var ex = Record.Exception(() => _hid.ButtonReleased += Raise.Event<Action>());
+        Assert.Null(ex);
+
+        await Task.Delay(TapWindow + 100);
+        _audio.DidNotReceive().ToggleMute();
+    }
+
+    [Fact]
+    public void Disconnect_ReturnsInteractionModeToIdle()
+    {
+        var modes = new List<InteractionMode>();
+        _hid.ButtonPressed += Raise.Event<Action>();   // → Button
+        _controller.InteractionModeChanged += modes.Add;
+
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(false);
+
+        Assert.Contains(InteractionMode.Idle, modes);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // LED master brightness
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Theory]
+    [InlineData(255, 255)] // full brightness → full range
+    [InlineData(128, 128)] // half brightness halves the LED output
+    [InlineData(0,     0)] // zero brightness → LED off
+    public void LedBrightness_ScalesLedOutput(int brightness, byte expected)
+    {
+        _audio.GetLevel().Returns(1.0f);
+        _config.LedBrightness   = brightness;
+        _config.LedPulseOnAudio = false;
+        _hid.ClearReceivedCalls();
+
+        _controller.UpdateConfig(_config);
+
+        _hid.Received().SetLed(expected);
+    }
+
+    [Fact]
+    public void LedBrightness_ScalesRotationLed()
+    {
+        _audio.GetLevel().Returns(0.5f);
+        _config.LedBrightness = 128;
+        _controller.UpdateConfig(_config);
+        _hid.ClearReceivedCalls();
+
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+
+        // 0.5 volume × (128/255) master → 64
+        _hid.Received().SetLed(64);
+    }
+
+    [Fact]
+    public async Task LedBrightness_ScalesAudioPulsePeak()
+    {
+        _hid.IsConnected.Returns(true);
+        _audio.GetPeakLevel().Returns(1.0f);
+        _media.GetPlaybackState().Returns(PlaybackState.Playing);
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _config.LedBrightness   = 128;
+
+        _controller.UpdateConfig(_config);
+        await Task.Delay(100); // let the pulse timer tick
+
+        _hid.Received().SetLed(128);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // UpdateConfig
     // ══════════════════════════════════════════════════════════════════════════

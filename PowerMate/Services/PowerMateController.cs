@@ -62,8 +62,51 @@ public class PowerMateController : IDisposable
         _hid.Rotated           += OnRotated;
         _hid.ButtonPressed     += OnButtonPressed;
         _hid.ButtonReleased    += OnButtonReleased;
-        _hid.ConnectionChanged += c => ConnectionChanged?.Invoke(c);
+        _hid.ConnectionChanged += OnHidConnectionChanged;
         _audio.VolumeChanged   += OnSystemVolumeChanged;
+    }
+
+    // ── LED ───────────────────────────────────────────────────────────────────
+
+    // The LED encodes its value as brightness, so LedBrightness acts as the
+    // maximum: level scales linearly within it rather than offsetting it.
+    private void WriteLed(float level)
+    {
+        int value = (int)(Math.Clamp(level, 0f, 1f) * _config.LedBrightness);
+        _hid.SetLed((byte)Math.Clamp(value, 0, 255));
+    }
+
+    // ── Connection ────────────────────────────────────────────────────────────
+
+    private void OnHidConnectionChanged(bool connected)
+    {
+        if (connected)
+        {
+            // HidService lights the LED at a fixed level on connect; restore ours.
+            if (!_config.LedPulseOnAudio) WriteLed(_audio.GetLevel());
+        }
+        else
+        {
+            ResetInputState();
+        }
+        ConnectionChanged?.Invoke(connected);
+    }
+
+    // A disconnect mid-gesture would otherwise leave the button latched down and a
+    // tap queued, so the next real press is counted as a second tap.
+    private void ResetInputState()
+    {
+        _buttonDown             = false;
+        _longPressFired         = false;
+        _ffRwActive             = false;
+        _rotationStepsWhileHeld = 0;
+
+        _longPressTimer?.Dispose(); _longPressTimer = null;
+        _tapTimer?.Dispose();       _tapTimer       = null;
+        Interlocked.Exchange(ref _tapCount, 0);
+        Interlocked.Increment(ref _tapGeneration);
+
+        SetInteractionMode(InteractionMode.Idle);
     }
 
     public void Start()
@@ -78,7 +121,7 @@ public class PowerMateController : IDisposable
         _config = config;
         ApplyAudioPulse();
         if (!_config.LedPulseOnAudio)
-            _hid.SetLed((byte)(_audio.GetLevel() * 255));
+            WriteLed(_audio.GetLevel());
     }
 
     // ── Interaction mode ──────────────────────────────────────────────────────
@@ -105,7 +148,7 @@ public class PowerMateController : IDisposable
             // Restore audio pulse LED (pulse timer already running if configured;
             // tick will no-op while not Idle, and now will resume)
             if (!_config.LedPulseOnAudio)
-                _hid.SetLed((byte)(_audio.GetLevel() * 255));
+                WriteLed(_audio.GetLevel());
         }, null, IdleTimeoutMs, Timeout.Infinite);
     }
 
@@ -115,7 +158,7 @@ public class PowerMateController : IDisposable
     {
         if (_selfChanging) return;
         if (!_config.LedPulseOnAudio || _volumeOverrideActive)
-            _hid.SetLed((byte)(level * 255));
+            WriteLed(level);
         VolumeChanged?.Invoke(level, muted);
     }
 
@@ -162,7 +205,7 @@ public class PowerMateController : IDisposable
         float vol   = _audio.GetLevel();
         bool  muted = _audio.IsMuted();
 
-        _hid.SetLed((byte)(vol * 255));
+        WriteLed(vol);
         if (_config.LedPulseOnAudio)
         {
             _volumeOverrideActive = true;
@@ -220,7 +263,7 @@ public class PowerMateController : IDisposable
             _ffRwActive = false;
             SetInteractionMode(InteractionMode.Idle);
             if (!_config.LedPulseOnAudio)
-                _hid.SetLed((byte)(_audio.GetLevel() * 255));
+                WriteLed(_audio.GetLevel());
 
             _ffRwReleaseGuard = true;
             _ffRwReleaseGuardTimer?.Dispose();
@@ -285,8 +328,7 @@ public class PowerMateController : IDisposable
     private void FfRwLedTick(object? _)
     {
         if (!_hid.IsConnected) return;
-        float pos = _media.GetPlaybackPosition();
-        _hid.SetLed((byte)(pos * 255));
+        WriteLed(_media.GetPlaybackPosition());
     }
 
     // ── Audio-peak LED pulse (idle mode) ──────────────────────────────────────
@@ -320,14 +362,14 @@ public class PowerMateController : IDisposable
         // Fall back to static volume indicator when nothing is playing
         if (_media.GetPlaybackState() != PlaybackState.Playing)
         {
-            _hid.SetLed((byte)(_audio.GetLevel() * 255));
+            WriteLed(_audio.GetLevel());
             return;
         }
 
         float peak = _config.LedBassOnly
             ? _audio.GetBassPeak()
             : _audio.GetPeakLevel();
-        _hid.SetLed((byte)(peak * 255));
+        WriteLed(peak);
     }
 
     // ── Power management ──────────────────────────────────────────────────────

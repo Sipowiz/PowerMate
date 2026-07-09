@@ -9,14 +9,13 @@ public class PowerMateConfig
     public bool InvertRotation { get; set; } = false;
     public int LongPressMs { get; set; } = 800;
     public int TapWindowMs { get; set; } = 350;
-    public int LedBrightness { get; set; } = 128;
+    public int LedBrightness { get; set; } = 255;
     public bool LedPulseOnAudio { get; set; } = false;
     public bool LedBassOnly { get; set; } = false;
     public int BassFrequencyCutoff { get; set; } = 250;
     public float BassGain { get; set; } = 5.0f;
     public int FfRwThreshold { get; set; } = 3;      // rotation steps needed to enter FF/RW
     public int FfRwStepSeconds { get; set; } = 5;    // seconds to seek per rotation step
-    public bool StartWithWindows { get; set; } = false;
     public int WindowX { get; set; } = -1;
     public int WindowY { get; set; } = -1;
 
