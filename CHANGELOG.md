@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.7] - 2026-07-09
+
+### Fixed
+- Installer's "Start with Windows" option was not respected — the installer registered autostart with a Startup-folder shortcut (`{userstartup}\PowerMate Driver.lnk`) while the app read and wrote the `HKCU\...\CurrentVersion\Run` value, so the in-app toggle could never disable what the installer enabled, and enabling both launched two instances. Both now drive the same Run value, and the settings toggle reads live registry state instead of a cached copy in `config.json`
+- Fast rotation lost most of the knob's movement — the device reports a *signed* delta in byte 2 that reaches ±4 when detents are batched between polls, but only ±1 was decoded. Measured against real hardware, 36% of rotation reports (58% of actual detents) were being silently discarded
+- Single click sometimes triggered Next Track — a disconnect while the button was held left stale button state in both `HidService` and `PowerMateController`, so the first report after reconnecting was counted as an extra tap ([#2](https://github.com/Sipowiz/PowerMate/issues/2))
+- Bass "Live level" meter never filled past ~20% — the bar bound a 0–100 percentage directly to `WidthRequest`, which is measured in device-independent pixels, not percent ([#5](https://github.com/Sipowiz/PowerMate/issues/5))
+- LED brightness slider did nothing — the setting was saved, clamped and unit-tested, but no code ever read it. It now caps the LED range for every indicator (volume, audio pulse, track position)
+- Uninstalling left an orphaned `Run` registry value pointing at the deleted executable
+- Uninstall entry showed a generic icon — `UninstallDisplayIcon` pointed at a path that does not exist after install
+- Changing any unrelated setting rewrote or deleted the autostart registry value as a side effect of `AutoSave`
+
+### Added
+- Single-instance guard — a second launch now exits immediately instead of opening the HID device alongside the first, which made every knob event register twice
+- Autostart path is written quoted, so the default install location under Program Files cannot be misparsed
+
+### Changed
+- The installer's "Start with Windows" checkbox is now **opt-in** (previously pre-ticked). Existing choices are preserved on upgrade
+- Default `LedBrightness` is now 255 (full range), matching how the LED behaved before the slider was wired up. A previously saved value will now take effect
+- `StartWithWindows` was removed from `config.json`; the Windows registry is the single source of truth. Old config files load unchanged
+
 ## [1.4.6] - 2026-05-26
 
 ### Fixed

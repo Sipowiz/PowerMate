@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using PowerMate.Models;
 using PowerMate.Services;
+using Serilog;
 
 namespace PowerMate.ViewModels;
 
@@ -147,6 +148,7 @@ public class SettingsViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(BassLevelPercent));
             OnPropertyChanged(nameof(BassLevelText));
             OnPropertyChanged(nameof(BassLevelWidth));
+            OnPropertyChanged(nameof(BassLevelRemaining));
         }
     }
     public string     BassLevelText      => $"{_bassLevelPercent}%";
@@ -179,10 +181,17 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     // ── System ────────────────────────────────────────────────────────────────
+    // Reads the Run key directly rather than a cached copy, so the switch always
+    // reflects what Windows will actually do — including what the installer set.
     public bool StartWithWindows
     {
-        get => _config.StartWithWindows;
-        set { _config.StartWithWindows = value; Notify(); }
+        get => StartupService.IsEnabled();
+        set
+        {
+            try { StartupService.Set(value); }
+            catch (Exception ex) { Log.Error(ex, "[{Source}]", "StartupService.Set"); }
+            OnPropertyChanged(nameof(StartWithWindows)); // snaps back if the write failed
+        }
     }
 
     // ── Updates ───────────────────────────────────────────────────────────────
@@ -224,7 +233,6 @@ public class SettingsViewModel : INotifyPropertyChanged
         {
             _config.Save();
             _controller.UpdateConfig(_config);
-            StartupService.Set(_config.StartWithWindows);
         }, null, SaveDebounceMs, Timeout.Infinite);
     }
 

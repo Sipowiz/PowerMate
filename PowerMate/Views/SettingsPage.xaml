@@ -220,9 +220,12 @@
                         </Grid>
                         <Border BackgroundColor="#3A3A3C" HeightRequest="8"
                                 StrokeShape="RoundRectangle 4" StrokeThickness="0">
-                            <Grid ColumnDefinitions="*">
-                                <BoxView BackgroundColor="#0A84FF" HorizontalOptions="Start"
-                                         WidthRequest="{Binding BassLevelPercent}"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{Binding BassLevelWidth}" />
+                                    <ColumnDefinition Width="{Binding BassLevelRemaining}" />
+                                </Grid.ColumnDefinitions>
+                                <BoxView Grid.Column="0" BackgroundColor="#0A84FF"
                                          HeightRequest="8" />
                             </Grid>
                         </Border>

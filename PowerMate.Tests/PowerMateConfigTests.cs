@@ -34,14 +34,13 @@ public class PowerMateConfigTests : IDisposable
         Assert.False(c.InvertRotation);
         Assert.Equal(800,   c.LongPressMs);
         Assert.Equal(350,   c.TapWindowMs);
-        Assert.Equal(128,   c.LedBrightness);
+        Assert.Equal(255,   c.LedBrightness);
         Assert.False(c.LedPulseOnAudio);
         Assert.False(c.LedBassOnly);
         Assert.Equal(250,   c.BassFrequencyCutoff);
         Assert.Equal(5.0f,  c.BassGain);
         Assert.Equal(3,     c.FfRwThreshold);
         Assert.Equal(5,     c.FfRwStepSeconds);
-        Assert.False(c.StartWithWindows);
     }
 
     // ── Load: missing / corrupt / extra-fields ─────────────────────────────────
@@ -114,7 +113,6 @@ public class PowerMateConfigTests : IDisposable
             BassGain            = 10.0f,
             FfRwThreshold       = 4,
             FfRwStepSeconds     = 10,
-            StartWithWindows    = true,
         };
 
         orig.Save();
@@ -132,7 +130,6 @@ public class PowerMateConfigTests : IDisposable
         Assert.Equal(orig.BassGain,            loaded.BassGain);
         Assert.Equal(orig.FfRwThreshold,       loaded.FfRwThreshold);
         Assert.Equal(orig.FfRwStepSeconds,     loaded.FfRwStepSeconds);
-        Assert.Equal(orig.StartWithWindows,    loaded.StartWithWindows);
     }
 
     [Fact]

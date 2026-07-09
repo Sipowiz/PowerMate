@@ -74,12 +74,15 @@ public class HidService : IHidService
         catch { _device = null; _stream = null; }
     }
 
-    private void Disconnect()
+    internal void Disconnect()
     {
         _stream?.Dispose();
         _stream      = null;
         _device      = null;
         IsConnected  = false;
+        // Stale button state would turn the first report after a reconnect into a
+        // phantom press or release.
+        _lastButton  = 0;
         ConnectionChanged?.Invoke(false);
     }
 
@@ -90,10 +93,18 @@ public class HidService : IHidService
     {
         var buf = new byte[8];
         if (_stream!.Read(buf) < 3) return;
+        ProcessReport(buf);
+    }
 
-        // buf[1] = button (1=pressed 0=released), buf[2] = rotation (1=CW 255=CCW)
-        if (buf[2] == 1)   Rotated?.Invoke(+1);
-        if (buf[2] == 255) Rotated?.Invoke(-1);
+    // buf[1] = button (1=pressed, 0=released).
+    // buf[2] = signed rotation delta, which reaches ±4 on a fast spin — the device
+    // batches detents between polls, so treating it as ±1 discards most of the turn.
+    internal void ProcessReport(ReadOnlySpan<byte> buf)
+    {
+        sbyte delta = (sbyte)buf[2];
+        int direction = Math.Sign(delta);
+        for (int i = Math.Abs((int)delta); i > 0; i--)
+            Rotated?.Invoke(direction);
 
         if (buf[1] != _lastButton)
         {
