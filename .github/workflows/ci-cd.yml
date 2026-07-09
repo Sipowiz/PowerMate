@@ -42,10 +42,97 @@ jobs:
 
       - run: dotnet test PowerMate.Tests/PowerMate.Tests.csproj -c ${{ env.BUILD_CONFIG }} -r win-x64 --no-build
 
-  # ── Release (only on v* tags) ────────────────────────────────────────
+  # ── Installer script validation ──────────────────────────────────────
+  # Compiles installer.iss on every push/PR so a broken script fails here
+  # rather than at release time. ISCC needs the publish output because the
+  # [Files] section globs it, so this publishes before compiling.
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
+      - name: Publish app
+        run: >
+          dotnet publish PowerMate/PowerMate.csproj
+          -f ${{ env.TARGET_FRAMEWORK }}
+          -c ${{ env.BUILD_CONFIG }}
+          -r win-x64
+          --self-contained true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\innosetup.exe"
+          Start-Process "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+
+      - name: Compile installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+
+      - name: Verify installer was produced
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "installer_output\PowerMateSetup.exe")) {
+            throw "ISCC reported success but produced no installer"
+          }
+
+  # ── Auto-tag main when the version is bumped ─────────────────────────
+  # Pushes v<Version> from PowerMate.csproj. Note a tag pushed with the default
+  # GITHUB_TOKEN does NOT trigger another workflow run, so the release job below
+  # depends on this job rather than on the tag push.
+  tag:
+    needs: [build, installer]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      created: ${{ steps.tag.outputs.created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag if <Version> has no tag yet
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' PowerMate/PowerMate.csproj | head -1)
+          if [ -z "$version" ]; then
+            echo "::error::Could not read <Version> from PowerMate/PowerMate.csproj"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version already tagged; nothing to release"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$version" -m "PowerMate Driver $version"
+          git push origin "v$version"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  # ── Release (on a v* tag, or when the tag job just created one) ──────
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, installer, tag]
+    if: >-
+      always()
+      && needs.build.result == 'success'
+      && needs.installer.result == 'success'
+      && (startsWith(github.ref, 'refs/tags/v') || needs.tag.outputs.created == 'true')
     runs-on: windows-latest
     permissions:
       contents: write
@@ -59,12 +146,14 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui-windows
 
-      - name: Extract version from tag
+      - name: Resolve version
         id: version
-        shell: pwsh
+        shell: bash
         run: |
-          $v = "${{ github.ref_name }}".TrimStart('v')
-          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+          set -euo pipefail
+          v="${{ needs.tag.outputs.version }}"
+          if [ -z "$v" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          echo "VERSION=$v" >> "$GITHUB_OUTPUT"
 
       - name: Publish app
         run: >
@@ -88,6 +177,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # Explicit: on a main push the ref is a branch, not the tag we just made.
+          tag_name: v${{ steps.version.outputs.VERSION }}
           name: PowerMate Driver ${{ steps.version.outputs.VERSION }}
           body: |
             ## PowerMate Driver ${{ steps.version.outputs.VERSION }}
