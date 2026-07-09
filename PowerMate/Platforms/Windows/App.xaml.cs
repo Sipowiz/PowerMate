@@ -236,7 +236,7 @@ public partial class App : MauiWinUIApplication
         bool isInteracting = _interactionMode != InteractionMode.Idle;
 
         float displayValue = isFfRw
-            ? (_mediaService?.GetPlaybackPosition() ?? 0f)
+            ? (_controller?.GetFfRwFraction() ?? 0f)   // seek target, not stale SMTC position
             : _currentVolume;
 
         var icon = TrayIconRenderer.Render(displayValue, _isMuted, _playbackState, isInteracting);

@@ -25,7 +25,9 @@ public class PowerMateControllerTests : IDisposable
         _hid   = Substitute.For<IHidService>();
         _audio = Substitute.For<IAudioService>();
         _media = Substitute.For<IMediaSessionService>();
-        _media.SeekRelativeAsync(Arg.Any<TimeSpan>()).Returns(Task.CompletedTask);
+        _media.SeekToAsync(Arg.Any<TimeSpan>()).Returns(Task.FromResult(true));
+        // GetPosition/GetDuration/GetSessionGeneration default to Zero/Zero/0,
+        // i.e. an anchor at the very start of a track of unknown length.
 
         _config = new PowerMateConfig
         {
@@ -389,7 +391,7 @@ public class PowerMateControllerTests : IDisposable
         _hid.ButtonReleased += Raise.Event<Action>();
         await Task.Delay(50);
 
-        await _media.DidNotReceive().SeekRelativeAsync(Arg.Any<TimeSpan>());
+        await _media.DidNotReceive().SeekToAsync(Arg.Any<TimeSpan>());
     }
 
     [Fact]
@@ -404,37 +406,128 @@ public class PowerMateControllerTests : IDisposable
             _hid.Rotated += Raise.Event<Action<int>>(1);
         await Task.Delay(50);
 
-        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(5));
+        // Anchor is 0; the detent that crossed the threshold is the first to seek.
+        await _media.Received().SeekToAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public async Task FfRw_CcwRotation_SeeksNegative()
+    public async Task FfRw_CcwRotation_SeeksBackwardFromAnchor()
     {
         _config.FfRwThreshold   = 2;
         _config.FfRwStepSeconds = 5;
         _controller.UpdateConfig(_config);
+        // Anchor away from 0 so a backward seek is not clamped at the track start.
+        _media.GetPosition().Returns(TimeSpan.FromMinutes(5));
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
 
         _hid.ButtonPressed += Raise.Event<Action>();
         _hid.Rotated += Raise.Event<Action<int>>(-1);
         _hid.Rotated += Raise.Event<Action<int>>(-1);
         await Task.Delay(50);
 
-        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(-5));
+        await _media.Received().SeekToAsync(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(5));
     }
 
     [Fact]
-    public async Task FfRw_AdditionalSteps_EachTriggerSeek()
+    public async Task FfRw_FastSpin_CoalescesToLatestCumulativeTarget()
+    {
+        // The bug: one SMTC seek per detent, each computed from a stale position.
+        // Now detents accumulate into one absolute target against a frozen anchor.
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        for (int i = 0; i < 5; i++)          // 5 detents → cumulative +25s
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(100);               // let the pump drain
+
+        await _media.Received().SeekToAsync(TimeSpan.FromSeconds(25));
+
+        int seekCalls = _media.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IMediaSessionService.SeekToAsync));
+        Assert.True(seekCalls < 5, $"expected coalesced seeks, got {seekCalls} for 5 detents");
+    }
+
+    [Fact]
+    public async Task FfRw_SeekTargetIsAbsolute_NotRelativeToLiveSmtcPosition()
+    {
+        // Regression for #4: SMTC lags after a seek. Even if it keeps reporting the
+        // pre-gesture position, the target must be anchor + cumulative offset.
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 10;
+        _controller.UpdateConfig(_config);
+        _media.GetPosition().Returns(TimeSpan.FromMinutes(1));   // read once, at entry
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);
+
+        // 1:00 + 20s, not 1:00 + 10s twice.
+        await _media.Received().SeekToAsync(TimeSpan.FromMinutes(1) + TimeSpan.FromSeconds(20));
+    }
+
+    [Fact]
+    public async Task FfRw_SeekTargetIsClampedToTrackBounds()
+    {
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 30;
+        _controller.UpdateConfig(_config);
+        _media.GetPosition().Returns(TimeSpan.FromSeconds(10));
+        _media.GetDuration().Returns(TimeSpan.FromSeconds(60));
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        for (int i = 0; i < 5; i++)          // 10s + 150s → far past the end
+            _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(100);
+
+        await _media.Received().SeekToAsync(TimeSpan.FromSeconds(60));
+        await _media.DidNotReceive().SeekToAsync(Arg.Is<TimeSpan>(t => t > TimeSpan.FromSeconds(60)));
+    }
+
+    [Fact]
+    public async Task FfRw_WhenSessionCannotSeek_StopsSeeking()
     {
         _config.FfRwThreshold   = 1;
         _config.FfRwStepSeconds = 5;
         _controller.UpdateConfig(_config);
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
+        _media.SeekToAsync(Arg.Any<TimeSpan>()).Returns(Task.FromResult(false));
 
         _hid.ButtonPressed += Raise.Event<Action>();
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 6; i++)
             _hid.Rotated += Raise.Event<Action<int>>(1);
-        await Task.Delay(50);
+        await Task.Delay(100);
 
-        await _media.Received(5).SeekRelativeAsync(TimeSpan.FromSeconds(5));
+        // The pump gives up after the first refusal rather than hammering the session.
+        int seekCalls = _media.ReceivedCalls()
+            .Count(c => c.GetMethodInfo().Name == nameof(IMediaSessionService.SeekToAsync));
+        Assert.Equal(1, seekCalls);
+    }
+
+    [Fact]
+    public async Task FfRw_Disconnect_DoesNotSeekAfterwards()
+    {
+        _config.FfRwThreshold   = 1;
+        _config.FfRwStepSeconds = 5;
+        _controller.UpdateConfig(_config);
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
+
+        _hid.ButtonPressed += Raise.Event<Action>();
+        _hid.Rotated += Raise.Event<Action<int>>(1);
+        await Task.Delay(50);                                       // pump applies the first target
+
+        _hid.ConnectionChanged += Raise.Event<Action<bool>>(false); // unplugged mid-gesture
+        _media.ClearReceivedCalls();
+
+        _hid.Rotated += Raise.Event<Action<int>>(1);                // stray detent after the drop
+        await Task.Delay(100);
+
+        await _media.DidNotReceive().SeekToAsync(Arg.Any<TimeSpan>());
     }
 
     [Fact]
@@ -451,7 +544,7 @@ public class PowerMateControllerTests : IDisposable
         await Task.Delay(50);
 
         // The second step triggered FfRw; seek was called at least once.
-        await _media.Received().SeekRelativeAsync(Arg.Any<TimeSpan>());
+        await _media.Received().SeekToAsync(Arg.Any<TimeSpan>());
     }
 
     [Fact]
@@ -461,13 +554,16 @@ public class PowerMateControllerTests : IDisposable
         _config.FfRwStepSeconds = 5;
         _config.InvertRotation  = true;
         _controller.UpdateConfig(_config);
+        // Anchor away from 0 so the inverted (backward) seek is not clamped.
+        _media.GetPosition().Returns(TimeSpan.FromMinutes(5));
+        _media.GetDuration().Returns(TimeSpan.FromMinutes(10));
 
         _hid.ButtonPressed += Raise.Event<Action>();
         _hid.Rotated += Raise.Event<Action<int>>(1);
         _hid.Rotated += Raise.Event<Action<int>>(1);
         await Task.Delay(50);
 
-        await _media.Received().SeekRelativeAsync(TimeSpan.FromSeconds(-5));
+        await _media.Received().SeekToAsync(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -565,7 +661,7 @@ public class PowerMateControllerTests : IDisposable
         _hid.Rotated += Raise.Event<Action<int>>(1);
         await Task.Delay(50);
 
-        await _media.Received(1).SeekRelativeAsync(TimeSpan.FromSeconds(3));
+        await _media.Received(1).SeekToAsync(TimeSpan.FromSeconds(3));
     }
 
     // ══════════════════════════════════════════════════════════════════════════

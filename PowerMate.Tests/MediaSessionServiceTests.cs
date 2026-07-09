@@ -47,33 +47,39 @@ public class MediaSessionServiceTests
         Assert.Equal(0f, svc.GetPlaybackPosition());
     }
 
-    // ── SeekRelativeAsync with no active session ───────────────────────────────
+    // ── SeekToAsync is deliberately NOT exercised here ────────────────────────
+    //
+    // MediaSessionService attaches to whatever SMTC session the machine happens to
+    // have, so calling SeekToAsync against a real instance would scrub whatever the
+    // developer is actually playing — and its return value depends on whether the
+    // async SMTC init has completed yet, which makes any assertion flaky. The
+    // previous SeekRelativeAsync_* tests did exactly this; they only ever asserted
+    // "did not throw", which hid both problems. Seek behaviour is covered against a
+    // mocked IMediaSessionService in PowerMateControllerTests.
+
+    // ── Absolute position / duration / generation ─────────────────────────────
 
     [Fact]
-    public async Task SeekRelativeAsync_WhenNoSession_CompletesWithoutThrowing()
+    public void GetPosition_Initially_ReturnsZero()
     {
         using var svc = new MediaSessionService();
-        var ex = await Record.ExceptionAsync(
-            () => svc.SeekRelativeAsync(TimeSpan.FromSeconds(5)));
-        Assert.Null(ex);
+        Assert.Equal(TimeSpan.Zero, svc.GetPosition());
     }
 
     [Fact]
-    public async Task SeekRelativeAsync_NegativeDelta_DoesNotThrow()
+    public void GetDuration_Initially_ReturnsZero()
     {
         using var svc = new MediaSessionService();
-        var ex = await Record.ExceptionAsync(
-            () => svc.SeekRelativeAsync(TimeSpan.FromSeconds(-10)));
-        Assert.Null(ex);
+        Assert.Equal(TimeSpan.Zero, svc.GetDuration());
     }
 
     [Fact]
-    public async Task SeekRelativeAsync_ZeroDelta_DoesNotThrow()
+    public void GetSessionGeneration_IsStableAcrossReads()
     {
+        // The generation must only move when the session or track changes, never
+        // on a mere timeline update — a caller uses it to detect a stale anchor.
         using var svc = new MediaSessionService();
-        var ex = await Record.ExceptionAsync(
-            () => svc.SeekRelativeAsync(TimeSpan.Zero));
-        Assert.Null(ex);
+        Assert.Equal(svc.GetSessionGeneration(), svc.GetSessionGeneration());
     }
 
     // ── Disposal ───────────────────────────────────────────────────────────────
