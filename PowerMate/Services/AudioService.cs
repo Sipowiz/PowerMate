@@ -139,6 +139,12 @@ public class AudioService : IAudioService
     // ── Loopback capture (peak + bass) ────────────────────────────────────────
     public float GetBassPeak() => _bassPeak;
 
+    // Serializes start/stop so an involuntary restart (device-change settle timer,
+    // controller watchdog) can never run concurrently and leave two live captures.
+    private readonly object _captureLock = new();
+
+    public bool IsCapturing => _capture != null;
+
     private float _bassGain = 5.0f;
     private volatile float _peak;
     private volatile float _bassPeak;
@@ -146,22 +152,28 @@ public class AudioService : IAudioService
 
     public void StartPeakCapture()
     {
-        StopCapture();
-        _bassMode = false;
-        _peak     = 0;
-        StartCaptureInternal();
+        lock (_captureLock)
+        {
+            StopCapture();
+            _bassMode = false;
+            _peak     = 0;
+            StartCaptureInternal();
+        }
     }
 
     public void StartBassCapture(int cutoffHz, float gain)
     {
-        StopCapture();
-        _bassCutoffHz = cutoffHz;
-        _bassGain     = gain;
-        _bassPeak     = 0;
-        _peak         = 0;
-        _fftPos       = 0;
-        _bassMode     = true;
-        StartCaptureInternal();
+        lock (_captureLock)
+        {
+            StopCapture();
+            _bassCutoffHz = cutoffHz;
+            _bassGain     = gain;
+            _bassPeak     = 0;
+            _peak         = 0;
+            _fftPos       = 0;
+            _bassMode     = true;
+            StartCaptureInternal();
+        }
     }
 
     private void StartCaptureInternal()
@@ -190,33 +202,42 @@ public class AudioService : IAudioService
         c.DataAvailable    -= OnLoopbackData;
         c.RecordingStopped -= OnCaptureStopped;
         try { c.Dispose(); } catch { }
-        if (ReferenceEquals(c, _capture))
+        lock (_captureLock)
         {
-            _capture  = null;
-            _peak     = 0;
-            _bassPeak = 0;
+            // Only clear if this is still the active capture — a restart may have
+            // already swapped in a new one. Leaving IsCapturing false here is what
+            // lets the controller's watchdog notice and re-arm.
+            if (ReferenceEquals(c, _capture))
+            {
+                _capture  = null;
+                _peak     = 0;
+                _bassPeak = 0;
+            }
         }
     }
 
     public void StopCapture()
     {
-        var cap = _capture;
-        if (cap == null) return;
-        _capture  = null;
-        _peak     = 0;
-        _bassPeak = 0;
-
-        cap.DataAvailable    -= OnLoopbackData;
-        cap.RecordingStopped -= OnCaptureStopped;
-
-        // StopRecording/Dispose can block when the audio driver is shutting down
-        // (e.g. during hibernate). Run on a pool thread so the WndProc returns
-        // immediately and Windows can proceed with the suspend without killing us.
-        Task.Run(() =>
+        lock (_captureLock)
         {
-            try { cap.StopRecording(); } catch { }
-            try { cap.Dispose();       } catch { }
-        });
+            var cap = _capture;
+            if (cap == null) return;
+            _capture  = null;
+            _peak     = 0;
+            _bassPeak = 0;
+
+            cap.DataAvailable    -= OnLoopbackData;
+            cap.RecordingStopped -= OnCaptureStopped;
+
+            // StopRecording/Dispose can block when the audio driver is shutting down
+            // (e.g. during hibernate). Run on a pool thread so the WndProc returns
+            // immediately and Windows can proceed with the suspend without killing us.
+            Task.Run(() =>
+            {
+                try { cap.StopRecording(); } catch { }
+                try { cap.Dispose();       } catch { }
+            });
+        }
     }
 
     private void OnLoopbackData(object? sender, WaveInEventArgs e)

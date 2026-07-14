@@ -28,6 +28,8 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 
 ## Screenshot
 
+<!-- TODO: Screenshot.gif is outdated — re-record after the 1.4.9 settings trim
+     (single Sensitivity slider, FF/RW Slow/Med/Fast preset, Bass collapsed to one toggle). -->
 <p align="center">
   <img src="Screenshot.gif" alt="PowerMate Settings" />
 </p>

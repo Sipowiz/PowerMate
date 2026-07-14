@@ -37,6 +37,9 @@ public class PowerMateController : IDisposable
 
     // ── Audio-peak LED pulse (idle) ───────────────────────────────────────────
     private Timer? _audioPulseTimer;
+    // Pulse tick is 20 ms; re-arm a dead capture at most once per ~1 s. Test-overridable.
+    internal int CaptureRetryTicks = 50;
+    private int _captureRetryTicks;
     private Timer? _volumeOverrideTimer;
     private volatile bool _volumeOverrideActive;
     private volatile bool _selfChanging;
@@ -377,7 +380,7 @@ public class PowerMateController : IDisposable
         var g = Volatile.Read(ref _ffRw);
         if (g == null) return;
 
-        long stepTicks = (long)_config.FfRwStepSeconds * TimeSpan.TicksPerSecond;
+        long stepTicks = (long)(_config.FfRwStepSeconds * TimeSpan.TicksPerSecond);
         long target    = g.AnchorTicks + _ffRwSteps * stepTicks;
         target = g.DurationTicks > 0 ? Math.Clamp(target, 0, g.DurationTicks)
                                      : Math.Max(target, 0);
@@ -508,6 +511,26 @@ public class PowerMateController : IDisposable
 
     private void AudioPulseTick(object? _)
     {
+        // Self-heal: the loopback capture dies on its own when the render stream
+        // stops (playback source closed, output device switched, monitor slept) and
+        // nothing else re-arms it — so bass pulsing goes dark until a settings change
+        // restarts it. If a pulse is configured but capture is down, re-acquire it.
+        if (_config.LedPulseOnAudio && !_audio.IsCapturing)
+        {
+            if (++_captureRetryTicks >= CaptureRetryTicks)
+            {
+                _captureRetryTicks = 0;
+                if (_config.LedBassOnly)
+                    _audio.StartBassCapture(_config.BassFrequencyCutoff, _config.BassGain);
+                else
+                    _audio.StartPeakCapture();
+            }
+        }
+        else
+        {
+            _captureRetryTicks = 0;
+        }
+
         // Only drive LED from audio when we're truly idle and not in a volume override
         if (!_hid.IsConnected
             || _volumeOverrideActive

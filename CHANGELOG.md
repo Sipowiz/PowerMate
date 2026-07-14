@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.9] - 2026-07-14
+
+### Fixed
+- LED audio-pulse stayed dark after the render stream stopped — when playback ended, the output device switched, or a monitor slept, the WASAPI loopback capture stopped on its own and nothing restarted it, so bass pulsing froze until a settings change re-armed it. `OnCaptureStopped` also raced the default-device-change restart, which only restarted if it still saw a live capture at that instant. Capture is now self-healing: the pulse tick re-acquires it (at most once per second) whenever a pulse is configured but capture is down, and start/stop are serialized so a restart can never leave two live captures
+
+### Changed
+- Fast-forward/rewind is much gentler — the knob emits many detents per turn, so even the old 1 s/detent minimum scrubbed too fast. Seek is now sub-second per detent, chosen from a **Slow / Medium / Fast** preset (0.25 / 0.5 / 1.0 s) instead of a 1–30 s slider
+- Settings page trimmed from ~13 controls to the essentials: the "Step per tick" and "Sensitivity" sliders merged into one Sensitivity control; the Multi-click window and Long-press duration sliders were removed (their proven defaults stay in code); the Bass frequency-cutoff and gain sliders were removed (Bass-only is now a single toggle)
+
 ## [1.4.8] - 2026-07-09
 
 ### Fixed

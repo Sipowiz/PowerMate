@@ -905,6 +905,44 @@ public class PowerMateControllerTests : IDisposable
         _hid.DidNotReceive().SetLed((byte)(0.8f * 255));
     }
 
+    [Fact]
+    public async Task AudioPulse_WhenCaptureDies_ReArmsCapture()
+    {
+        // The render stream can stop on its own (source closed, output device
+        // switched, monitor slept), leaving IsCapturing false with nothing to
+        // restart it. The pulse tick must notice and re-acquire capture.
+        _hid.IsConnected.Returns(true);
+        _audio.IsCapturing.Returns(false);      // capture is down and stays down
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _controller.CaptureRetryTicks = 2;      // re-arm within a few ticks for the test
+
+        _controller.UpdateConfig(_config);      // ApplyAudioPulse issues the initial start
+        _audio.ClearReceivedCalls();
+
+        await Task.Delay(150);                  // several 20 ms pulse ticks elapse
+
+        _audio.Received().StartPeakCapture();   // watchdog re-armed it
+    }
+
+    [Fact]
+    public async Task AudioPulse_WhenCapturing_DoesNotReArm()
+    {
+        // While capture is healthy the watchdog must stay out of the way.
+        _hid.IsConnected.Returns(true);
+        _audio.IsCapturing.Returns(true);
+        _config.LedPulseOnAudio = true;
+        _config.LedBassOnly     = false;
+        _controller.CaptureRetryTicks = 2;
+
+        _controller.UpdateConfig(_config);
+        _audio.ClearReceivedCalls();
+
+        await Task.Delay(150);
+
+        _audio.DidNotReceive().StartPeakCapture();
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Suspend / Resume (power management)
     // ══════════════════════════════════════════════════════════════════════════

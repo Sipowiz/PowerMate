@@ -40,7 +40,7 @@ public class PowerMateConfigTests : IDisposable
         Assert.Equal(250,   c.BassFrequencyCutoff);
         Assert.Equal(5.0f,  c.BassGain);
         Assert.Equal(3,     c.FfRwThreshold);
-        Assert.Equal(5,     c.FfRwStepSeconds);
+        Assert.Equal(0.5,   c.FfRwStepSeconds);
     }
 
     // ── Load: missing / corrupt / extra-fields ─────────────────────────────────
@@ -112,7 +112,7 @@ public class PowerMateConfigTests : IDisposable
             BassFrequencyCutoff = 100,
             BassGain            = 10.0f,
             FfRwThreshold       = 4,
-            FfRwStepSeconds     = 10,
+            FfRwStepSeconds     = 0.25,
         };
 
         orig.Save();
@@ -171,7 +171,7 @@ public class PowerMateConfigTests : IDisposable
             ["BassFrequencyCutoff"] = 250,
             ["BassGain"]            = 5.0,
             ["FfRwThreshold"]       = 3,
-            ["FfRwStepSeconds"]     = 5,
+            ["FfRwStepSeconds"]     = 0.5,
         };
         props[field] = value;
         File.WriteAllText(ConfigPath, JsonSerializer.Serialize(props));
@@ -232,14 +232,15 @@ public class PowerMateConfigTests : IDisposable
     public void Sanitize_FfRwThreshold(int input, int expected)
         => Assert.Equal(expected, LoadWithSingleFieldOverride("FfRwThreshold", input).FfRwThreshold);
 
-    // FfRwStepSeconds: clamp 1–30
+    // FfRwStepSeconds: clamp 0.1–2.0 (seconds of media seeked per detent)
     [Theory]
-    [InlineData(0,   1)]
-    [InlineData(1,   1)]
-    [InlineData(30, 30)]
-    [InlineData(60, 30)]
-    public void Sanitize_FfRwStepSeconds(int input, int expected)
-        => Assert.Equal(expected, LoadWithSingleFieldOverride("FfRwStepSeconds", input).FfRwStepSeconds);
+    [InlineData(0.0, 0.1)]
+    [InlineData(0.1, 0.1)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(2.0, 2.0)]
+    [InlineData(9.0, 2.0)]
+    public void Sanitize_FfRwStepSeconds(double input, double expected)
+        => Assert.Equal(expected, LoadWithSingleFieldOverride("FfRwStepSeconds", input).FfRwStepSeconds, 5);
 
     // Sensitivity: finite → clamp 0.5–3.0; non-finite → 1.0f (default)
     [Theory]

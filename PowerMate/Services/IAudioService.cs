@@ -13,6 +13,10 @@ public interface IAudioService : IDisposable
     void StartBassCapture(int cutoffHz, float gain);
     void StopCapture();
 
+    /// <summary>True while a loopback capture is running. Goes false on its own when
+    /// the render stream dies (source stopped, device switched), so callers can re-arm.</summary>
+    bool IsCapturing { get; }
+
     /// <summary>Fired when the system volume or mute state changes from any source.</summary>
     event Action<float, bool>? VolumeChanged;
 }
