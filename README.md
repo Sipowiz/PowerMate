@@ -12,12 +12,12 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 
 ## Features
 
-- **Volume Control** — Rotate the knob to adjust system volume with configurable step size, sensitivity, and invert option
+- **Volume Control** — Rotate the knob to adjust system volume with a single Sensitivity slider and invert option
 - **Media Keys** — Single, double, and triple click for play/pause, next track, and previous track
-- **Long Press** — Mute/unmute on long press (configurable threshold)
-- **Fast-Forward / Rewind** — Hold button and rotate to seek in the current media track; configurable seek step (1–30 s)
+- **Long Press** — Mute/unmute on long press
+- **Fast-Forward / Rewind** — Hold button and rotate to seek in the current media track; Slow / Medium / Fast speed presets
 - **LED Feedback** — LED brightness reflects current volume level; falls back to volume when media is paused or stopped
-- **Audio-Reactive LED** — LED pulses to audio output using WASAPI loopback RMS capture; optional bass-only mode with FFT analysis and configurable cutoff/gain
+- **Audio-Reactive LED** — LED pulses to audio output using WASAPI loopback RMS capture, with a live level meter; optional bass-only mode with FFT analysis
 - **System Tray** — Dynamic tray icon shows a live blue volume arc, playback state symbol, and mute indicator
 - **SMTC Integration** — Reads media session state (play/pause/stop) and flashes a skip symbol on the tray icon for next/previous track
 - **Sleep/Hibernate** — Survives system suspend: audio capture stops cleanly before sleep and restarts automatically on resume
@@ -28,8 +28,6 @@ A native Windows driver and settings app for the [Griffin PowerMate](https://en.
 
 ## Screenshot
 
-<!-- TODO: Screenshot.gif is outdated — re-record after the 1.4.9 settings trim
-     (single Sensitivity slider, FF/RW Slow/Med/Fast preset, Bass collapsed to one toggle). -->
 <p align="center">
   <img src="Screenshot.gif" alt="PowerMate Settings" />
 </p>
@@ -74,7 +72,13 @@ Settings are stored in `%APPDATA%\PowerMate\config.json` and are auto-saved when
 | BassFrequencyCutoff | 250 | Max frequency (Hz) for bass detection (60–500) |
 | BassGain | 5.0 | Bass level multiplier (0.5–50) |
 | FfRwThreshold | 3 | Rotation steps while held before entering FF/RW mode (1–10) |
-| FfRwStepSeconds | 5 | Seconds to seek per rotation step during FF/RW (1–30) |
+| FfRwStepSeconds | 0.5 | Seconds to seek per detent during FF/RW (0.1–2.0); the UI presets Slow/Medium/Fast map to 0.25/0.5/1.0 |
+| WindowX / WindowY | -1 | Saved settings-window position; managed automatically (-1 = default placement) |
+
+Since 1.4.9 the settings UI only exposes the essentials. The remaining values
+(Sensitivity, LongPressMs, TapWindowMs, BassFrequencyCutoff, BassGain) are still
+honored at runtime and can be edited by hand in `config.json`. Note that moving
+the Sensitivity slider in the UI resets the Sensitivity multiplier to 1.0.
 
 "Start with Windows" is not stored here — it lives in the `HKCU\...\CurrentVersion\Run`
 registry value, which the installer writes too, so the setting and the installer can
@@ -127,7 +131,7 @@ PowerMate/
 dotnet test PowerMate.Tests/PowerMate.Tests.csproj
 ```
 
-163 unit tests covering rotation, multi-tap detection, long press, FF/RW, LED updates, audio-pulse fallback, power management (suspend/resume), crash logging, config persistence, and connection events. Uses xUnit and NSubstitute.
+190 unit tests covering rotation, multi-tap detection, long press, FF/RW, LED updates, audio-pulse fallback and self-healing capture, power management (suspend/resume), crash logging, config persistence, and connection events. Uses xUnit and NSubstitute.
 
 ## CI/CD
 
