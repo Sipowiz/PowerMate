@@ -66,11 +66,11 @@ jobs:
           --self-contained true
 
       - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          $url = "https://jrsoftware.org/download.php/is.exe"
-          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\innosetup.exe"
-          Start-Process "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+        # Chocolatey is preinstalled on windows-latest and installs Inno Setup 6 to
+        # C:\Program Files (x86)\Inno Setup 6\ (the path the compile step uses).
+        # Replaces the old jrsoftware.org/download.php/is.exe fetch, which stopped
+        # serving the binary directly and left a corrupt, unrunnable file.
+        run: choco install innosetup --no-progress -y
 
       - name: Compile installer
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
@@ -164,11 +164,11 @@ jobs:
           -p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          $url = "https://jrsoftware.org/download.php/is.exe"
-          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\innosetup.exe"
-          Start-Process "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+        # Chocolatey is preinstalled on windows-latest and installs Inno Setup 6 to
+        # C:\Program Files (x86)\Inno Setup 6\ (the path the compile step uses).
+        # Replaces the old jrsoftware.org/download.php/is.exe fetch, which stopped
+        # serving the binary directly and left a corrupt, unrunnable file.
+        run: choco install innosetup --no-progress -y
 
       - name: Compile installer
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.version.outputs.VERSION }} installer.iss'

@@ -48,23 +48,22 @@ public class SettingsViewModel : INotifyPropertyChanged
     public int    CurrentVolumePercent => (int)(_audio.GetLevel() * 100);
 
     // ── Volume ────────────────────────────────────────────────────────────────
+    // A single "Sensitivity" control drives volume-per-detent (the Sensitivity
+    // multiplier stays at its default in config; it is no longer a separate slider).
     public int VolumeStep
     {
         get => _config.VolumeStep;
-        set { _config.VolumeStep = Math.Clamp(value, 1, 10); Notify(); }
-    }
-
-    public float Sensitivity
-    {
-        get => _config.Sensitivity;
         set
         {
-            _config.Sensitivity = (float)Math.Round(Math.Clamp(value, 0.5, 3.0), 1);
+            _config.VolumeStep = Math.Clamp(value, 1, 10);
+            // The separate Sensitivity multiplier is no longer exposed; pin it to 1×
+            // so this single control is authoritative for volume-per-detent.
+            _config.Sensitivity = 1.0f;
             Notify();
-            Notify(nameof(SensitivityText));
+            Notify(nameof(VolumeStepText));
         }
     }
-    public string SensitivityText => $"{Sensitivity:0.0}×";
+    public string VolumeStepText => $"{_config.VolumeStep}%";
 
     public bool InvertRotation
     {
@@ -72,28 +71,32 @@ public class SettingsViewModel : INotifyPropertyChanged
         set { _config.InvertRotation = value; Notify(); }
     }
 
-    // ── Button timing ─────────────────────────────────────────────────────────
-    public int TapWindowMs
-    {
-        get => _config.TapWindowMs;
-        set { _config.TapWindowMs = Math.Clamp(value, 150, 800); Notify(); Notify(nameof(TapWindowMsText)); }
-    }
-    public string TapWindowMsText => $"{TapWindowMs} ms";
-
-    public int LongPressMs
-    {
-        get => _config.LongPressMs;
-        set { _config.LongPressMs = Math.Clamp(value, 300, 2000); Notify(); Notify(nameof(LongPressMsText)); }
-    }
-    public string LongPressMsText => $"{LongPressMs} ms";
-
     // ── FF/RW ─────────────────────────────────────────────────────────────────
-    public int FfRwStepSeconds
+    // Preset speeds mapped to seconds-of-media seeked per detent. Tune these three
+    // values to change the feel; the picker snaps the stored value to the nearest.
+    private static readonly double[] FfRwSpeedValues = { 0.25, 0.5, 1.0 };
+    public IReadOnlyList<string> FfRwSpeedOptions { get; } = new[] { "Slow", "Medium", "Fast" };
+
+    public int FfRwSpeedIndex
     {
-        get => _config.FfRwStepSeconds;
-        set { _config.FfRwStepSeconds = Math.Clamp(value, 1, 30); Notify(); Notify(nameof(FfRwStepText)); }
+        get
+        {
+            int best = 1;
+            double bestDist = double.MaxValue;
+            for (int i = 0; i < FfRwSpeedValues.Length; i++)
+            {
+                double d = Math.Abs(FfRwSpeedValues[i] - _config.FfRwStepSeconds);
+                if (d < bestDist) { bestDist = d; best = i; }
+            }
+            return best;
+        }
+        set
+        {
+            int i = Math.Clamp(value, 0, FfRwSpeedValues.Length - 1);
+            _config.FfRwStepSeconds = FfRwSpeedValues[i];
+            Notify();
+        }
     }
-    public string FfRwStepText => $"{FfRwStepSeconds} s";
 
     // ── LED ───────────────────────────────────────────────────────────────────
     public int LedBrightness
@@ -113,28 +116,8 @@ public class SettingsViewModel : INotifyPropertyChanged
     public bool LedBassOnly
     {
         get => _config.LedBassOnly;
-        set { _config.LedBassOnly = value; Notify(); Notify(nameof(ShowBassFrequency)); }
+        set { _config.LedBassOnly = value; Notify(); }
     }
-    public bool ShowBassFrequency => _config.LedBassOnly && _config.LedPulseOnAudio;
-
-    public int BassFrequencyCutoff
-    {
-        get => _config.BassFrequencyCutoff;
-        set { _config.BassFrequencyCutoff = Math.Clamp(value, 60, 500); Notify(); Notify(nameof(BassFrequencyCutoffText)); }
-    }
-    public string BassFrequencyCutoffText => $"{BassFrequencyCutoff} Hz";
-
-    public float BassGain
-    {
-        get => _config.BassGain;
-        set
-        {
-            _config.BassGain = (float)Math.Round(Math.Clamp(value, 0.5, 50.0), 1);
-            Notify();
-            Notify(nameof(BassGainText));
-        }
-    }
-    public string BassGainText => $"{BassGain:0.0}×";
 
     // Live bass level meter (0-100) for the settings page bar
     private int _bassLevelPercent;

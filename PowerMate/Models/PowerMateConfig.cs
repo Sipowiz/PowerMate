@@ -14,8 +14,8 @@ public class PowerMateConfig
     public bool LedBassOnly { get; set; } = false;
     public int BassFrequencyCutoff { get; set; } = 250;
     public float BassGain { get; set; } = 5.0f;
-    public int FfRwThreshold { get; set; } = 3;      // rotation steps needed to enter FF/RW
-    public int FfRwStepSeconds { get; set; } = 5;    // seconds to seek per rotation step
+    public int FfRwThreshold { get; set; } = 3;         // rotation steps needed to enter FF/RW
+    public double FfRwStepSeconds { get; set; } = 0.5;  // seconds seeked per detent (sub-second: a natural spin emits many)
     public int WindowX { get; set; } = -1;
     public int WindowY { get; set; } = -1;
 
@@ -71,7 +71,7 @@ public class PowerMateConfig
         c.BassFrequencyCutoff  = Math.Clamp(c.BassFrequencyCutoff, 60, 500);
         c.BassGain             = float.IsFinite(c.BassGain) ? Math.Clamp(c.BassGain, 0.5f, 50.0f) : 5.0f;
         c.FfRwThreshold        = Math.Clamp(c.FfRwThreshold, 1, 10);
-        c.FfRwStepSeconds      = Math.Clamp(c.FfRwStepSeconds, 1, 30);
+        c.FfRwStepSeconds      = double.IsFinite(c.FfRwStepSeconds) ? Math.Clamp(c.FfRwStepSeconds, 0.1, 2.0) : 0.5;
         return c;
     }
 }
